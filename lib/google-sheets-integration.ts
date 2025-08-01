@@ -29,34 +29,64 @@ export class GoogleSheetsIntegration {
 
   async getRequisitions(): Promise<RequisitionData[]> {
     try {
-      let url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/Sheet1!A:CE`
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
+      // Try different sheet names/ranges
+      const possibleRanges = [
+        "Sheet1!A:CE", // Default sheet name
+        "'Form Responses 1'!A:CE", // Common Google Form response sheet name
+        "'Form responses 1'!A:CE", // Alternative naming
+        "A:CE", // No sheet name specified
+      ]
+
+      let data = null
+      let lastError = null
+
+      for (const range of possibleRanges) {
+        try {
+          let url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/${encodeURIComponent(range)}`
+          const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+          }
+
+          // Use OAuth token if available (for managers), otherwise use API key
+          if (this.accessToken && this.accessToken !== "team-member-token") {
+            headers.Authorization = `Bearer ${this.accessToken}`
+          } else if (this.apiKey) {
+            url += `?key=${this.apiKey}`
+          } else {
+            throw new Error("No authentication method available")
+          }
+
+          console.log(`Trying to fetch from range: ${range}`)
+          const response = await fetch(url, { headers })
+
+          if (response.ok) {
+            data = await response.json()
+            console.log(`Successfully fetched data from range: ${range}`)
+            break
+          } else {
+            const errorText = await response.text()
+            console.log(`Failed to fetch from ${range}:`, errorText)
+            lastError = errorText
+          }
+        } catch (error) {
+          console.log(`Error with range ${range}:`, error)
+          lastError = error
+        }
       }
 
-      // Use OAuth token if available (for managers), otherwise use API key
-      if (this.accessToken && this.accessToken !== "team-member-token") {
-        headers.Authorization = `Bearer ${this.accessToken}`
-      } else if (this.apiKey) {
-        url += `?key=${this.apiKey}`
-      } else {
-        throw new Error("No authentication method available")
+      if (!data) {
+        throw new Error(`Failed to fetch data from any range. Last error: ${lastError}`)
       }
 
-      const response = await fetch(url, { headers })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Google Sheets API Error:", errorText)
-        throw new Error(`Failed to fetch data: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
       const rows = data.values || []
 
       if (rows.length === 0) {
+        console.log("No data found in the sheet")
         return []
       }
+
+      console.log(`Found ${rows.length} rows of data`)
+      console.log("First few rows:", rows.slice(0, 3))
 
       // Skip header row and map data based on your column structure
       const dataRows = rows.slice(1)
@@ -92,59 +122,68 @@ export class GoogleSheetsIntegration {
         return false
       }
 
-      // Update status in column CE (column 83)
-      const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/Sheet1!CE${rowIndex + 2}?valueInputOption=RAW`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            values: [[status]],
-          }),
-        },
-      )
+      // Try different sheet names for updating
+      const possibleSheetNames = ["Sheet1", "Form Responses 1", "Form responses 1"]
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Update error:", errorText)
+      for (const sheetName of possibleSheetNames) {
+        try {
+          const range = `'${sheetName}'!CE${rowIndex + 2}`
+          const response = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+            {
+              method: "PUT",
+              headers: {
+                Authorization: `Bearer ${this.accessToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                values: [[status]],
+              }),
+            },
+          )
+
+          if (response.ok) {
+            console.log(`Successfully updated status in ${sheetName}`)
+            return true
+          }
+        } catch (error) {
+          console.log(`Failed to update in ${sheetName}:`, error)
+        }
       }
 
-      return response.ok
+      return false
     } catch (error) {
       console.error("Error updating status:", error)
       return false
     }
   }
 
-  async addStatusColumn(): Promise<boolean> {
+  // Method to test sheet access
+  async testSheetAccess(): Promise<{ success: boolean; sheetNames: string[]; error?: string }> {
     try {
-      if (!this.accessToken || this.accessToken === "team-member-token") {
-        console.error("Cannot add column: OAuth token required for write operations")
-        return false
+      let url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}`
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
       }
 
-      // Add "Status" header to column CE
-      const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/Sheet1!CE1?valueInputOption=RAW`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            values: [["Status"]],
-          }),
-        },
-      )
+      if (this.accessToken && this.accessToken !== "team-member-token") {
+        headers.Authorization = `Bearer ${this.accessToken}`
+      } else if (this.apiKey) {
+        url += `?key=${this.apiKey}`
+      }
 
-      return response.ok
+      const response = await fetch(url, { headers })
+
+      if (response.ok) {
+        const data = await response.json()
+        const sheetNames = data.sheets?.map((sheet: any) => sheet.properties.title) || []
+        return { success: true, sheetNames }
+      } else {
+        const errorText = await response.text()
+        return { success: false, sheetNames: [], error: errorText }
+      }
     } catch (error) {
-      console.error("Error adding status column:", error)
-      return false
+      return { success: false, sheetNames: [], error: error instanceof Error ? error.message : "Unknown error" }
     }
   }
 }
