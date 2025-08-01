@@ -7,22 +7,34 @@ export async function GET(request: NextRequest) {
     const userEmail = request.cookies.get("user_email")?.value
     const teamMemberSession = request.cookies.get("team_member_session")?.value
 
-    // Handle team member authentication
+    console.log("Auth check - Access token:", !!accessToken)
+    console.log("Auth check - User email:", userEmail)
+    console.log("Auth check - Team member session:", teamMemberSession)
+
+    // Handle team member authentication first
     if (teamMemberSession) {
       const authService = new TeamAuthService()
       const teamMembers = authService.getAllTeamMembers()
       const teamMember = teamMembers.find((m) => m.id === teamMemberSession)
 
       if (teamMember) {
+        console.log("Found team member:", teamMember.email)
         return NextResponse.json({
-          user: teamMember,
-          accessToken: "team-member-token", // Placeholder token
+          user: {
+            id: teamMember.id,
+            email: teamMember.email,
+            name: teamMember.name,
+            role: teamMember.role,
+            team: teamMember.team,
+          },
+          accessToken: "team-member-token",
         })
       }
     }
 
     // Handle manager authentication
     if (!accessToken || !userEmail) {
+      console.log("No authentication found")
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
@@ -34,6 +46,7 @@ export async function GET(request: NextRequest) {
     })
 
     if (!userResponse.ok) {
+      console.log("Invalid Google token")
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
@@ -57,6 +70,7 @@ export async function GET(request: NextRequest) {
       role: getUserRole(googleUser.email),
     }
 
+    console.log("Found manager:", user.email)
     return NextResponse.json({ user, accessToken })
   } catch (error) {
     console.error("Auth check error:", error)
