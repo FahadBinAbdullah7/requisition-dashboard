@@ -1,52 +1,52 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { useRequisitions } from "@/hooks/use-requisitions"
-import { TeamMemberLogin } from "@/components/team-member-login"
 import { TeamManagement } from "@/components/team-management"
 
-export default function RequisitionDashboard() {
-  const [accessToken, setAccessToken] = useState<string | null>(null)
+export default function AuthenticatedDashboard() {
+  const router = useRouter()
   const [user, setUser] = useState<any>(null)
+  const [accessToken, setAccessToken] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [teamFilter, setTeamFilter] = useState("all")
-  const [showLogin, setShowLogin] = useState(false)
-  const [viewMode, setViewMode] = useState<"public" | "authenticated">("public")
   const [activeTab, setActiveTab] = useState("dashboard")
-  const [authChecked, setAuthChecked] = useState(false)
+  const [selectedRequisition, setSelectedRequisition] = useState<any>(null)
 
-  const { requisitions, loading, error, updateStatus, refetch } = useRequisitions(accessToken || "public")
+  const { requisitions, loading: dataLoading, error, updateStatus, refetch } = useRequisitions(accessToken)
 
-  // Check for existing authentication on component mount
+  // Check authentication on mount
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const response = await fetch("/api/auth/me", {
           credentials: "include",
         })
+
         if (response.ok) {
           const userData = await response.json()
           setUser(userData.user)
           setAccessToken(userData.accessToken)
-          setViewMode("authenticated")
         } else {
-          // No authentication found, stay in public mode
-          setAccessToken("public")
-          setViewMode("public")
+          // Not authenticated, redirect to login
+          router.push("/login")
+          return
         }
       } catch (err) {
-        console.log("No existing auth, staying in public mode")
-        setAccessToken("public")
-        setViewMode("public")
+        console.error("Auth check failed:", err)
+        router.push("/login")
+        return
       } finally {
-        setAuthChecked(true)
+        setLoading(false)
       }
     }
 
     checkAuth()
-  }, [])
+  }, [router])
 
   // Filter requisitions
   const filteredRequisitions = useMemo(() => {
@@ -106,29 +106,13 @@ export default function RequisitionDashboard() {
   const stats = getStats()
   const uniqueTeams = [...new Set(requisitions.map((req) => req.assignedTeam).filter(Boolean))]
 
-  const handleLogin = (userData: any) => {
-    setUser(userData)
-    if (userData.role === "manager") {
-      setAccessToken(userData.accessToken)
-    } else {
-      setAccessToken("team-member-token")
-    }
-    setViewMode("authenticated")
-    setShowLogin(false)
-    refetch()
-  }
-
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST", credentials: "include" })
     } catch (error) {
       console.error("Logout error:", error)
     }
-    setUser(null)
-    setAccessToken("public")
-    setViewMode("public")
-    setActiveTab("dashboard")
-    refetch()
+    router.push("/")
   }
 
   const handleStatusUpdate = async (id: string, newStatus: string) => {
@@ -157,59 +141,42 @@ export default function RequisitionDashboard() {
     }
   }
 
-  const openModal = (reqId: string) => {
-    const modalElement = document.getElementById(`modal-${reqId}`)
-    if (modalElement) {
-      // Create modal instance if Bootstrap is loaded
-      if (typeof window !== "undefined" && (window as any).bootstrap) {
-        const modal = new (window as any).bootstrap.Modal(modalElement)
-        modal.show()
-      } else {
-        // Fallback: show modal manually
-        modalElement.style.display = "block"
-        modalElement.classList.add("show")
-        document.body.classList.add("modal-open")
+  const openModal = (req: any) => {
+    setSelectedRequisition(req)
+    document.body.style.overflow = "hidden"
+  }
 
-        // Add backdrop
-        const backdrop = document.createElement("div")
-        backdrop.className = "modal-backdrop fade show"
-        backdrop.id = `backdrop-${reqId}`
-        document.body.appendChild(backdrop)
+  const closeModal = () => {
+    setSelectedRequisition(null)
+    document.body.style.overflow = "auto"
+  }
+
+  // Handle escape key to close modal
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedRequisition) {
+        closeModal()
       }
     }
-  }
 
-  const closeModal = (reqId: string) => {
-    const modalElement = document.getElementById(`modal-${reqId}`)
-    const backdrop = document.getElementById(`backdrop-${reqId}`)
+    document.addEventListener("keydown", handleEscape)
+    return () => document.removeEventListener("keydown", handleEscape)
+  }, [selectedRequisition])
 
-    if (modalElement) {
-      modalElement.style.display = "none"
-      modalElement.classList.remove("show")
-      document.body.classList.remove("modal-open")
-
-      if (backdrop) {
-        backdrop.remove()
-      }
-    }
-  }
-
-  // Show login component if explicitly requested
-  if (showLogin) {
-    return <TeamMemberLogin onLogin={handleLogin} />
-  }
-
-  // Show loading only if auth hasn't been checked yet
-  if (!authChecked || (loading && !requisitions.length)) {
+  if (loading) {
     return (
       <div className="min-vh-100 d-flex align-items-center justify-content-center">
         <div className="loading-container">
           <div className="loading-spinner mb-4"></div>
           <h3 className="text-center mb-3">Loading Dashboard</h3>
-          <p className="text-center text-muted">Connecting to Google Sheets...</p>
+          <p className="text-center text-muted">Checking authentication...</p>
         </div>
       </div>
     )
+  }
+
+  if (!user) {
+    return null // Will redirect to login
   }
 
   if (error) {
@@ -230,24 +197,6 @@ export default function RequisitionDashboard() {
                       <i className="bi bi-arrow-clockwise me-2"></i>
                       Retry Connection
                     </button>
-                    <div className="row">
-                      <div className="col-6">
-                        <button
-                          className="btn btn-outline-secondary w-100"
-                          onClick={() => window.open("/api/test-connection", "_blank")}
-                        >
-                          Test API
-                        </button>
-                      </div>
-                      <div className="col-6">
-                        <button
-                          className="btn btn-outline-secondary w-100"
-                          onClick={() => window.open("/api/debug-columns", "_blank")}
-                        >
-                          Debug
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -263,46 +212,40 @@ export default function RequisitionDashboard() {
       {/* Navigation */}
       <nav className="navbar navbar-expand-lg navbar-light sticky-top">
         <div className="container">
-          <a className="navbar-brand d-flex align-items-center" href="#">
+          <a className="navbar-brand d-flex align-items-center" href="/dashboard">
             <i className="bi bi-file-text me-2" style={{ fontSize: "1.5rem" }}></i>
             Requisition Management System
           </a>
 
           <div className="d-flex align-items-center">
-            {viewMode === "public" ? (
-              <div className="d-flex align-items-center">
-                <span className="badge bg-success me-3">
-                  <i className="bi bi-globe me-1"></i>
-                  Public View
-                </span>
-                <button className="btn btn-primary" onClick={() => setShowLogin(true)}>
-                  <i className="bi bi-box-arrow-in-right me-2"></i>
-                  Team Login
-                </button>
-              </div>
-            ) : (
-              <div className="d-flex align-items-center">
-                <div className="me-3 text-end">
-                  <div className="fw-bold">{user?.name}</div>
-                  <small className="text-muted text-capitalize">
-                    {user?.role?.replace("_", " ")} {user?.team && `• ${user.team}`}
-                  </small>
-                </div>
-                <div className="dropdown">
-                  <button className="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                    <i className="bi bi-person-circle me-1"></i>
+            <div className="me-3 text-end">
+              <div className="fw-bold">{user?.name}</div>
+              <small className="text-muted text-capitalize">
+                {user?.role?.replace("_", " ")} {user?.team && `• ${user.team}`}
+              </small>
+            </div>
+            <div className="dropdown">
+              <button className="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i className="bi bi-person-circle me-1"></i>
+              </button>
+              <ul className="dropdown-menu dropdown-menu-end">
+                <li>
+                  <button className="dropdown-item" onClick={() => router.push("/")}>
+                    <i className="bi bi-globe me-2"></i>
+                    Public View
                   </button>
-                  <ul className="dropdown-menu dropdown-menu-end">
-                    <li>
-                      <button className="dropdown-item" onClick={handleLogout}>
-                        <i className="bi bi-box-arrow-right me-2"></i>
-                        Logout
-                      </button>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            )}
+                </li>
+                <li>
+                  <hr className="dropdown-divider" />
+                </li>
+                <li>
+                  <button className="dropdown-item" onClick={handleLogout}>
+                    <i className="bi bi-box-arrow-right me-2"></i>
+                    Logout
+                  </button>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </nav>
@@ -316,27 +259,23 @@ export default function RequisitionDashboard() {
                 <div className="row align-items-center">
                   <div className="col">
                     <h1 className="text-gradient mb-2">
-                      {viewMode === "public"
-                        ? "Public Dashboard"
-                        : user?.role === "manager"
-                          ? "Manager Dashboard"
-                          : user?.role === "team_member"
-                            ? "Team Member Dashboard"
-                            : "Dashboard"}
+                      {user?.role === "manager"
+                        ? "Manager Dashboard"
+                        : user?.role === "team_member"
+                          ? "Team Member Dashboard"
+                          : "Dashboard"}
                     </h1>
                     <p className="text-muted mb-0">
-                      {viewMode === "public"
-                        ? "View all requisition requests and their current status"
-                        : user?.role === "manager"
-                          ? "Manage requisitions, teams, and system settings"
-                          : user?.role === "team_member"
-                            ? `Review and approve requisitions for ${user?.team || "your team"}`
-                            : "Manage your requisition requests"}
+                      {user?.role === "manager"
+                        ? "Manage requisitions, teams, and system settings"
+                        : user?.role === "team_member"
+                          ? `Review and approve requisitions for ${user?.team || "your team"}`
+                          : "Manage your requisition requests"}
                     </p>
                   </div>
                   <div className="col-auto">
-                    <button className="btn btn-outline-primary" onClick={refetch} disabled={loading}>
-                      {loading ? (
+                    <button className="btn btn-outline-primary" onClick={refetch} disabled={dataLoading}>
+                      {dataLoading ? (
                         <>
                           <span className="spinner-border spinner-border-sm me-2" role="status"></span>
                           Refreshing...
@@ -417,84 +356,8 @@ export default function RequisitionDashboard() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="row mb-4">
-          <div className="col">
-            <div className="card">
-              <div className="card-header">
-                <h5 className="mb-0">
-                  <i className="bi bi-funnel me-2"></i>
-                  Filters & Search
-                </h5>
-              </div>
-              <div className="card-body">
-                <div className="row">
-                  <div className="col-md-2 mb-3">
-                    <label className="form-label">From Date</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={dateFrom}
-                      onChange={(e) => setDateFrom(e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-2 mb-3">
-                    <label className="form-label">To Date</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={dateTo}
-                      onChange={(e) => setDateTo(e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-2 mb-3">
-                    <label className="form-label">Status</label>
-                    <select
-                      className="form-select"
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                      <option value="all">All Status</option>
-                      <option value="pending">Pending</option>
-                      <option value="approved">Approved</option>
-                      <option value="completed">Completed</option>
-                      <option value="rejected">Rejected</option>
-                    </select>
-                  </div>
-                  <div className="col-md-2 mb-3">
-                    <label className="form-label">Team</label>
-                    <select className="form-select" value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)}>
-                      <option value="all">All Teams</option>
-                      {uniqueTeams.map((team) => (
-                        <option key={team} value={team}>
-                          {team}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-md-2 mb-3">
-                    <label className="form-label">&nbsp;</label>
-                    <button
-                      className="btn btn-outline-secondary w-100"
-                      onClick={() => {
-                        setDateFrom("")
-                        setDateTo("")
-                        setStatusFilter("all")
-                        setTeamFilter("all")
-                      }}
-                    >
-                      <i className="bi bi-arrow-clockwise me-1"></i>
-                      Clear
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Tabs */}
-        {viewMode === "authenticated" && user?.role === "manager" && (
+        {/* Navigation Tabs for Managers */}
+        {user?.role === "manager" && (
           <div className="row mb-4">
             <div className="col">
               <ul className="nav nav-pills nav-fill">
@@ -505,15 +368,6 @@ export default function RequisitionDashboard() {
                   >
                     <i className="bi bi-speedometer2 me-2"></i>
                     Dashboard
-                  </button>
-                </li>
-                <li className="nav-item">
-                  <button
-                    className={`nav-link ${activeTab === "requisitions" ? "active" : ""}`}
-                    onClick={() => setActiveTab("requisitions")}
-                  >
-                    <i className="bi bi-file-text me-2"></i>
-                    All Requisitions
                   </button>
                 </li>
                 <li className="nav-item">
@@ -531,62 +385,140 @@ export default function RequisitionDashboard() {
         )}
 
         {/* Content based on active tab */}
-        {(activeTab === "dashboard" || viewMode === "public" || user?.role === "team_member") && (
-          <div className="row">
-            <div className="col">
-              <div className="card">
-                <div className="card-header">
-                  <h5 className="mb-0">
-                    <i className="bi bi-list-ul me-2"></i>
-                    {viewMode === "public"
-                      ? "All Requisitions"
-                      : user?.role === "team_member"
-                        ? "Requisitions for Review"
-                        : "Recent Requisitions"}
-                  </h5>
-                </div>
-                <div className="card-body">
-                  {filteredRequisitions.length === 0 ? (
-                    <div className="text-center py-5">
-                      <i className="bi bi-inbox text-muted" style={{ fontSize: "4rem" }}></i>
-                      <h4 className="text-muted mt-3">No requisitions found</h4>
-                      <p className="text-muted">
-                        {requisitions.length === 0
-                          ? "No data found in your Google Sheet."
-                          : "No requisitions match your current filters."}
-                      </p>
+        {(activeTab === "dashboard" || user?.role === "team_member") && (
+          <>
+            {/* Filters */}
+            <div className="row mb-4">
+              <div className="col">
+                <div className="card">
+                  <div className="card-header">
+                    <h5 className="mb-0">
+                      <i className="bi bi-funnel me-2"></i>
+                      Filters & Search
+                    </h5>
+                  </div>
+                  <div className="card-body">
+                    <div className="row">
+                      <div className="col-md-2 mb-3">
+                        <label className="form-label">From Date</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={dateFrom}
+                          onChange={(e) => setDateFrom(e.target.value)}
+                        />
+                      </div>
+                      <div className="col-md-2 mb-3">
+                        <label className="form-label">To Date</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={dateTo}
+                          onChange={(e) => setDateTo(e.target.value)}
+                        />
+                      </div>
+                      <div className="col-md-2 mb-3">
+                        <label className="form-label">Status</label>
+                        <select
+                          className="form-select"
+                          value={statusFilter}
+                          onChange={(e) => setStatusFilter(e.target.value)}
+                        >
+                          <option value="all">All Status</option>
+                          <option value="pending">Pending</option>
+                          <option value="approved">Approved</option>
+                          <option value="completed">Completed</option>
+                          <option value="rejected">Rejected</option>
+                        </select>
+                      </div>
+                      <div className="col-md-2 mb-3">
+                        <label className="form-label">Team</label>
+                        <select
+                          className="form-select"
+                          value={teamFilter}
+                          onChange={(e) => setTeamFilter(e.target.value)}
+                        >
+                          <option value="all">All Teams</option>
+                          {uniqueTeams.map((team) => (
+                            <option key={team} value={team}>
+                              {team}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-md-2 mb-3">
+                        <label className="form-label">&nbsp;</label>
+                        <button
+                          className="btn btn-outline-secondary w-100"
+                          onClick={() => {
+                            setDateFrom("")
+                            setDateTo("")
+                            setStatusFilter("all")
+                            setTeamFilter("all")
+                          }}
+                        >
+                          <i className="bi bi-arrow-clockwise me-1"></i>
+                          Clear
+                        </button>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="table-responsive">
-                      <table className="table table-hover">
-                        <thead>
-                          <tr>
-                            <th>Product/Course</th>
-                            <th>Type</th>
-                            <th>Submitter</th>
-                            <th>Team</th>
-                            <th>Status</th>
-                            <th>Submitted</th>
-                            {(user?.role === "team_member" || user?.role === "manager") && <th>Actions</th>}
-                            <th>Details</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredRequisitions.slice(0, 20).map((req) => (
-                            <tr key={req.id}>
-                              <td>
-                                <strong>{req.productName || "Untitled"}</strong>
-                              </td>
-                              <td>
-                                <span className="badge bg-light text-dark">{req.type}</span>
-                              </td>
-                              <td>{req.email}</td>
-                              <td>
-                                <span className="badge bg-info">{req.assignedTeam}</span>
-                              </td>
-                              <td>{getStatusBadge(req.status)}</td>
-                              <td>{req.timestamp ? new Date(req.timestamp).toLocaleDateString() : "Unknown"}</td>
-                              {(user?.role === "team_member" || user?.role === "manager") && (
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Requisitions Table */}
+            <div className="row">
+              <div className="col">
+                <div className="card">
+                  <div className="card-header">
+                    <h5 className="mb-0">
+                      <i className="bi bi-list-ul me-2"></i>
+                      {user?.role === "team_member" ? "Requisitions for Review" : "All Requisitions"} (
+                      {filteredRequisitions.length})
+                    </h5>
+                  </div>
+                  <div className="card-body">
+                    {filteredRequisitions.length === 0 ? (
+                      <div className="text-center py-5">
+                        <i className="bi bi-inbox text-muted" style={{ fontSize: "4rem" }}></i>
+                        <h4 className="text-muted mt-3">No requisitions found</h4>
+                        <p className="text-muted">
+                          {requisitions.length === 0
+                            ? "No data found in your Google Sheet."
+                            : "No requisitions match your current filters."}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="table-responsive">
+                        <table className="table table-hover">
+                          <thead>
+                            <tr>
+                              <th>Product/Course</th>
+                              <th>Type</th>
+                              <th>Submitter</th>
+                              <th>Team</th>
+                              <th>Status</th>
+                              <th>Submitted</th>
+                              <th>Actions</th>
+                              <th>Details</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredRequisitions.map((req) => (
+                              <tr key={req.id}>
+                                <td>
+                                  <strong>{req.productName || "Untitled"}</strong>
+                                </td>
+                                <td>
+                                  <span className="badge bg-light text-dark">{req.type}</span>
+                                </td>
+                                <td>{req.email}</td>
+                                <td>
+                                  <span className="badge bg-info">{req.assignedTeam}</span>
+                                </td>
+                                <td>{getStatusBadge(req.status)}</td>
+                                <td>{req.timestamp ? new Date(req.timestamp).toLocaleDateString() : "Unknown"}</td>
                                 <td>
                                   <div className="btn-group btn-group-sm">
                                     <button
@@ -615,282 +547,27 @@ export default function RequisitionDashboard() {
                                     </button>
                                   </div>
                                 </td>
-                              )}
-                              <td>
-                                <button className="btn btn-outline-primary btn-sm" onClick={() => openModal(req.id)}>
-                                  <i className="bi bi-eye me-1"></i>
-                                  View
-                                </button>
-
-                                {/* Enhanced Modal for each requisition */}
-                                <div className="modal fade" id={`modal-${req.id}`} tabIndex={-1} aria-hidden="true">
-                                  <div className="modal-dialog modal-xl">
-                                    <div className="modal-content">
-                                      <div className="modal-header bg-primary text-white">
-                                        <h5 className="modal-title">
-                                          <i className="bi bi-file-text me-2"></i>
-                                          {req.productName || "Requisition Details"}
-                                        </h5>
-                                        <button
-                                          type="button"
-                                          className="btn-close btn-close-white"
-                                          onClick={() => closeModal(req.id)}
-                                        ></button>
-                                      </div>
-                                      <div className="modal-body">
-                                        <div className="row g-4">
-                                          {/* Basic Information */}
-                                          <div className="col-12">
-                                            <div className="card">
-                                              <div className="card-header">
-                                                <h6 className="mb-0">
-                                                  <i className="bi bi-info-circle me-2"></i>Basic Information
-                                                </h6>
-                                              </div>
-                                              <div className="card-body">
-                                                <div className="row">
-                                                  <div className="col-md-6 mb-3">
-                                                    <label className="form-label fw-bold text-primary">
-                                                      Product/Course Name
-                                                    </label>
-                                                    <div className="p-2 bg-light rounded">
-                                                      {req.productName || "Not specified"}
-                                                    </div>
-                                                  </div>
-                                                  <div className="col-md-6 mb-3">
-                                                    <label className="form-label fw-bold text-primary">
-                                                      Request Type
-                                                    </label>
-                                                    <div className="p-2 bg-light rounded">
-                                                      <span className="badge bg-secondary">
-                                                        {req.type || "Not specified"}
-                                                      </span>
-                                                    </div>
-                                                  </div>
-                                                  <div className="col-md-6 mb-3">
-                                                    <label className="form-label fw-bold text-primary">
-                                                      Current Status
-                                                    </label>
-                                                    <div className="p-2 bg-light rounded">
-                                                      {getStatusBadge(req.status)}
-                                                    </div>
-                                                  </div>
-                                                  <div className="col-md-6 mb-3">
-                                                    <label className="form-label fw-bold text-primary">
-                                                      Assigned Team
-                                                    </label>
-                                                    <div className="p-2 bg-light rounded">
-                                                      <span className="badge bg-info">
-                                                        {req.assignedTeam || "Not assigned"}
-                                                      </span>
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-
-                                          {/* Contact Information */}
-                                          <div className="col-12">
-                                            <div className="card">
-                                              <div className="card-header">
-                                                <h6 className="mb-0">
-                                                  <i className="bi bi-person-lines-fill me-2"></i>Contact Information
-                                                </h6>
-                                              </div>
-                                              <div className="card-body">
-                                                <div className="row">
-                                                  <div className="col-md-6 mb-3">
-                                                    <label className="form-label fw-bold text-primary">
-                                                      Submitter Email
-                                                    </label>
-                                                    <div className="p-2 bg-light rounded">
-                                                      <i className="bi bi-envelope me-2"></i>
-                                                      {req.email || "Not provided"}
-                                                    </div>
-                                                  </div>
-                                                  <div className="col-md-6 mb-3">
-                                                    <label className="form-label fw-bold text-primary">POC Name</label>
-                                                    <div className="p-2 bg-light rounded">
-                                                      <i className="bi bi-person me-2"></i>
-                                                      {req.pocName || "Not provided"}
-                                                    </div>
-                                                  </div>
-                                                  <div className="col-md-6 mb-3">
-                                                    <label className="form-label fw-bold text-primary">POC Email</label>
-                                                    <div className="p-2 bg-light rounded">
-                                                      <i className="bi bi-envelope me-2"></i>
-                                                      {req.pocEmail || "Not provided"}
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-
-                                          {/* Project Details */}
-                                          <div className="col-12">
-                                            <div className="card">
-                                              <div className="card-header">
-                                                <h6 className="mb-0">
-                                                  <i className="bi bi-clipboard-data me-2"></i>Project Details
-                                                </h6>
-                                              </div>
-                                              <div className="card-body">
-                                                <div className="row">
-                                                  <div className="col-12 mb-3">
-                                                    <label className="form-label fw-bold text-primary">
-                                                      Request Details
-                                                    </label>
-                                                    <div
-                                                      className="p-3 bg-light rounded"
-                                                      style={{ minHeight: "100px" }}
-                                                    >
-                                                      {req.details || "No details provided"}
-                                                    </div>
-                                                  </div>
-                                                  <div className="col-md-6 mb-3">
-                                                    <label className="form-label fw-bold text-primary">
-                                                      Delivery Timeline
-                                                    </label>
-                                                    <div className="p-2 bg-light rounded">
-                                                      <i className="bi bi-clock me-2"></i>
-                                                      {req.deliveryTimeline || "Not specified"}
-                                                    </div>
-                                                  </div>
-                                                  <div className="col-md-6 mb-3">
-                                                    <label className="form-label fw-bold text-primary">
-                                                      Estimated Start Date
-                                                    </label>
-                                                    <div className="p-2 bg-light rounded">
-                                                      <i className="bi bi-calendar-event me-2"></i>
-                                                      {req.estimatedStartDate || "Not specified"}
-                                                    </div>
-                                                  </div>
-                                                  <div className="col-md-6 mb-3">
-                                                    <label className="form-label fw-bold text-primary">
-                                                      Expected Delivery Date
-                                                    </label>
-                                                    <div className="p-2 bg-light rounded">
-                                                      <i className="bi bi-calendar-check me-2"></i>
-                                                      {req.expectedDeliveryDate || "Not specified"}
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-
-                                          {/* Additional Information */}
-                                          <div className="col-12">
-                                            <div className="card">
-                                              <div className="card-header">
-                                                <h6 className="mb-0">
-                                                  <i className="bi bi-plus-circle me-2"></i>Additional Information
-                                                </h6>
-                                              </div>
-                                              <div className="card-body">
-                                                <div className="row">
-                                                  {req.requisitionBreakdown && (
-                                                    <div className="col-md-6 mb-3">
-                                                      <label className="form-label fw-bold text-primary">
-                                                        Requisition Breakdown
-                                                      </label>
-                                                      <div className="p-2 bg-light rounded">
-                                                        <a
-                                                          href={req.requisitionBreakdown}
-                                                          target="_blank"
-                                                          rel="noopener noreferrer"
-                                                          className="btn btn-outline-primary btn-sm"
-                                                        >
-                                                          <i className="bi bi-file-text me-1"></i>
-                                                          View Document
-                                                        </a>
-                                                      </div>
-                                                    </div>
-                                                  )}
-                                                  <div className="col-md-6 mb-3">
-                                                    <label className="form-label fw-bold text-primary">
-                                                      Submission Date
-                                                    </label>
-                                                    <div className="p-2 bg-light rounded">
-                                                      <i className="bi bi-calendar3 me-2"></i>
-                                                      {req.timestamp
-                                                        ? new Date(req.timestamp).toLocaleString()
-                                                        : "Unknown"}
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <div className="modal-footer">
-                                        {(user?.role === "team_member" || user?.role === "manager") && (
-                                          <div className="btn-group me-auto">
-                                            <button
-                                              className="btn btn-success"
-                                              onClick={() => {
-                                                handleStatusUpdate(req.id, "approved")
-                                                closeModal(req.id)
-                                              }}
-                                              disabled={req.status === "completed" || req.status === "approved"}
-                                            >
-                                              <i className="bi bi-check-circle me-1"></i>
-                                              Approve
-                                            </button>
-                                            <button
-                                              className="btn btn-primary"
-                                              onClick={() => {
-                                                handleStatusUpdate(req.id, "completed")
-                                                closeModal(req.id)
-                                              }}
-                                              disabled={req.status !== "approved"}
-                                            >
-                                              <i className="bi bi-check-circle-fill me-1"></i>
-                                              Complete
-                                            </button>
-                                            <button
-                                              className="btn btn-danger"
-                                              onClick={() => {
-                                                handleStatusUpdate(req.id, "rejected")
-                                                closeModal(req.id)
-                                              }}
-                                              disabled={req.status === "completed" || req.status === "rejected"}
-                                            >
-                                              <i className="bi bi-x-circle me-1"></i>
-                                              Reject
-                                            </button>
-                                          </div>
-                                        )}
-                                        <button
-                                          type="button"
-                                          className="btn btn-secondary"
-                                          onClick={() => closeModal(req.id)}
-                                        >
-                                          <i className="bi bi-x-lg me-1"></i>
-                                          Close
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                                <td>
+                                  <button className="btn btn-outline-primary btn-sm" onClick={() => openModal(req)}>
+                                    <i className="bi bi-eye me-1"></i>
+                                    View
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          </>
         )}
 
         {/* Team Management Tab (Manager Only) */}
-        {activeTab === "teams" && viewMode === "authenticated" && user?.role === "manager" && (
+        {activeTab === "teams" && user?.role === "manager" && (
           <div className="row">
             <div className="col">
               <TeamManagement />
@@ -898,6 +575,227 @@ export default function RequisitionDashboard() {
           </div>
         )}
       </div>
+
+      {/* Custom Modal */}
+      {selectedRequisition && (
+        <div className="custom-modal-overlay" onClick={closeModal}>
+          <div className="custom-modal-container" onClick={(e) => e.stopPropagation()}>
+            <div className="custom-modal-header">
+              <h5 className="custom-modal-title">
+                <i className="bi bi-file-text me-2"></i>
+                {selectedRequisition.productName || "Requisition Details"}
+              </h5>
+              <button className="custom-modal-close" onClick={closeModal}>
+                <i className="bi bi-x-lg"></i>
+              </button>
+            </div>
+            <div className="custom-modal-body">
+              <div className="row g-4">
+                {/* Basic Information */}
+                <div className="col-12">
+                  <div className="card">
+                    <div className="card-header">
+                      <h6 className="mb-0">
+                        <i className="bi bi-info-circle me-2"></i>Basic Information
+                      </h6>
+                    </div>
+                    <div className="card-body">
+                      <div className="row">
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label fw-bold text-primary">Product/Course Name</label>
+                          <div className="p-2 bg-light rounded">
+                            {selectedRequisition.productName || "Not specified"}
+                          </div>
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label fw-bold text-primary">Request Type</label>
+                          <div className="p-2 bg-light rounded">
+                            <span className="badge bg-secondary">{selectedRequisition.type || "Not specified"}</span>
+                          </div>
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label fw-bold text-primary">Current Status</label>
+                          <div className="p-2 bg-light rounded">{getStatusBadge(selectedRequisition.status)}</div>
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label fw-bold text-primary">Assigned Team</label>
+                          <div className="p-2 bg-light rounded">
+                            <span className="badge bg-info">{selectedRequisition.assignedTeam || "Not assigned"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contact Information */}
+                <div className="col-12">
+                  <div className="card">
+                    <div className="card-header">
+                      <h6 className="mb-0">
+                        <i className="bi bi-person-lines-fill me-2"></i>Contact Information
+                      </h6>
+                    </div>
+                    <div className="card-body">
+                      <div className="row">
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label fw-bold text-primary">Submitter Email</label>
+                          <div className="p-2 bg-light rounded">
+                            <i className="bi bi-envelope me-2"></i>
+                            {selectedRequisition.email || "Not provided"}
+                          </div>
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label fw-bold text-primary">POC Name</label>
+                          <div className="p-2 bg-light rounded">
+                            <i className="bi bi-person me-2"></i>
+                            {selectedRequisition.pocName || "Not provided"}
+                          </div>
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label fw-bold text-primary">POC Email</label>
+                          <div className="p-2 bg-light rounded">
+                            <i className="bi bi-envelope me-2"></i>
+                            {selectedRequisition.pocEmail || "Not provided"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Project Details */}
+                <div className="col-12">
+                  <div className="card">
+                    <div className="card-header">
+                      <h6 className="mb-0">
+                        <i className="bi bi-clipboard-data me-2"></i>Project Details
+                      </h6>
+                    </div>
+                    <div className="card-body">
+                      <div className="row">
+                        <div className="col-12 mb-3">
+                          <label className="form-label fw-bold text-primary">Request Details</label>
+                          <div
+                            className="p-3 bg-light rounded"
+                            style={{ minHeight: "100px", maxHeight: "200px", overflowY: "auto" }}
+                          >
+                            {selectedRequisition.details || "No details provided"}
+                          </div>
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label fw-bold text-primary">Delivery Timeline</label>
+                          <div className="p-2 bg-light rounded">
+                            <i className="bi bi-clock me-2"></i>
+                            {selectedRequisition.deliveryTimeline || "Not specified"}
+                          </div>
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label fw-bold text-primary">Estimated Start Date</label>
+                          <div className="p-2 bg-light rounded">
+                            <i className="bi bi-calendar-event me-2"></i>
+                            {selectedRequisition.estimatedStartDate || "Not specified"}
+                          </div>
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label fw-bold text-primary">Expected Delivery Date</label>
+                          <div className="p-2 bg-light rounded">
+                            <i className="bi bi-calendar-check me-2"></i>
+                            {selectedRequisition.expectedDeliveryDate || "Not specified"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Information */}
+                <div className="col-12">
+                  <div className="card">
+                    <div className="card-header">
+                      <h6 className="mb-0">
+                        <i className="bi bi-plus-circle me-2"></i>Additional Information
+                      </h6>
+                    </div>
+                    <div className="card-body">
+                      <div className="row">
+                        {selectedRequisition.requisitionBreakdown && (
+                          <div className="col-md-6 mb-3">
+                            <label className="form-label fw-bold text-primary">Requisition Breakdown</label>
+                            <div className="p-2 bg-light rounded">
+                              <a
+                                href={selectedRequisition.requisitionBreakdown}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn-outline-primary btn-sm"
+                              >
+                                <i className="bi bi-file-text me-1"></i>
+                                View Document
+                              </a>
+                            </div>
+                          </div>
+                        )}
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label fw-bold text-primary">Submission Date</label>
+                          <div className="p-2 bg-light rounded">
+                            <i className="bi bi-calendar3 me-2"></i>
+                            {selectedRequisition.timestamp
+                              ? new Date(selectedRequisition.timestamp).toLocaleString()
+                              : "Unknown"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="custom-modal-footer">
+              {(user?.role === "team_member" || user?.role === "manager") && (
+                <div className="btn-group me-auto">
+                  <button
+                    className="btn btn-success"
+                    onClick={() => {
+                      handleStatusUpdate(selectedRequisition.id, "approved")
+                      closeModal()
+                    }}
+                    disabled={selectedRequisition.status === "completed" || selectedRequisition.status === "approved"}
+                  >
+                    <i className="bi bi-check-circle me-1"></i>
+                    Approve
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      handleStatusUpdate(selectedRequisition.id, "completed")
+                      closeModal()
+                    }}
+                    disabled={selectedRequisition.status !== "approved"}
+                  >
+                    <i className="bi bi-check-circle-fill me-1"></i>
+                    Complete
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => {
+                      handleStatusUpdate(selectedRequisition.id, "rejected")
+                      closeModal()
+                    }}
+                    disabled={selectedRequisition.status === "completed" || selectedRequisition.status === "rejected"}
+                  >
+                    <i className="bi bi-x-circle me-1"></i>
+                    Reject
+                  </button>
+                </div>
+              )}
+              <button className="btn btn-secondary" onClick={closeModal}>
+                <i className="bi bi-x-lg me-1"></i>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
