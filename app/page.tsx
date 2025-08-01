@@ -6,7 +6,7 @@ import { TeamMemberLogin } from "@/components/team-member-login"
 import { TeamManagement } from "@/components/team-management"
 
 export default function RequisitionDashboard() {
-  const [accessToken, setAccessToken] = useState<string | null>("public")
+  const [accessToken, setAccessToken] = useState<string | null>(null)
   const [user, setUser] = useState<any>(null)
   const [statusFilter, setStatusFilter] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
@@ -15,22 +15,33 @@ export default function RequisitionDashboard() {
   const [showLogin, setShowLogin] = useState(false)
   const [viewMode, setViewMode] = useState<"public" | "authenticated">("public")
   const [activeTab, setActiveTab] = useState("dashboard")
+  const [authChecked, setAuthChecked] = useState(false)
 
-  const { requisitions, loading, error, updateStatus, refetch } = useRequisitions(accessToken)
+  const { requisitions, loading, error, updateStatus, refetch } = useRequisitions(accessToken || "public")
 
   // Check for existing authentication on component mount
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch("/api/auth/me")
+        const response = await fetch("/api/auth/me", {
+          credentials: "include",
+        })
         if (response.ok) {
           const userData = await response.json()
           setUser(userData.user)
           setAccessToken(userData.accessToken)
           setViewMode("authenticated")
+        } else {
+          // No authentication found, stay in public mode
+          setAccessToken("public")
+          setViewMode("public")
         }
       } catch (err) {
         console.log("No existing auth, staying in public mode")
+        setAccessToken("public")
+        setViewMode("public")
+      } finally {
+        setAuthChecked(true)
       }
     }
 
@@ -107,8 +118,12 @@ export default function RequisitionDashboard() {
     refetch()
   }
 
-  const handleLogout = () => {
-    fetch("/api/auth/logout", { method: "POST" })
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" })
+    } catch (error) {
+      console.error("Logout error:", error)
+    }
     setUser(null)
     setAccessToken("public")
     setViewMode("public")
@@ -117,15 +132,75 @@ export default function RequisitionDashboard() {
   }
 
   const handleStatusUpdate = async (id: string, newStatus: string) => {
-    await updateStatus(id, newStatus)
-    setTimeout(() => refetch(), 1000)
+    const success = await updateStatus(id, newStatus)
+    if (success) {
+      // Show success message
+      const alertDiv = document.createElement("div")
+      alertDiv.className = "alert alert-success alert-dismissible fade show position-fixed"
+      alertDiv.style.cssText = "top: 20px; right: 20px; z-index: 9999; min-width: 300px;"
+      alertDiv.innerHTML = `
+        <i class="bi bi-check-circle me-2"></i>
+        Status updated to <strong>${newStatus}</strong> successfully!
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+      `
+      document.body.appendChild(alertDiv)
+
+      // Auto remove after 3 seconds
+      setTimeout(() => {
+        if (alertDiv.parentNode) {
+          alertDiv.parentNode.removeChild(alertDiv)
+        }
+      }, 3000)
+
+      // Refresh data after a short delay
+      setTimeout(() => refetch(), 1500)
+    }
   }
 
+  const openModal = (reqId: string) => {
+    const modalElement = document.getElementById(`modal-${reqId}`)
+    if (modalElement) {
+      // Create modal instance if Bootstrap is loaded
+      if (typeof window !== "undefined" && (window as any).bootstrap) {
+        const modal = new (window as any).bootstrap.Modal(modalElement)
+        modal.show()
+      } else {
+        // Fallback: show modal manually
+        modalElement.style.display = "block"
+        modalElement.classList.add("show")
+        document.body.classList.add("modal-open")
+
+        // Add backdrop
+        const backdrop = document.createElement("div")
+        backdrop.className = "modal-backdrop fade show"
+        backdrop.id = `backdrop-${reqId}`
+        document.body.appendChild(backdrop)
+      }
+    }
+  }
+
+  const closeModal = (reqId: string) => {
+    const modalElement = document.getElementById(`modal-${reqId}`)
+    const backdrop = document.getElementById(`backdrop-${reqId}`)
+
+    if (modalElement) {
+      modalElement.style.display = "none"
+      modalElement.classList.remove("show")
+      document.body.classList.remove("modal-open")
+
+      if (backdrop) {
+        backdrop.remove()
+      }
+    }
+  }
+
+  // Show login component if explicitly requested
   if (showLogin) {
     return <TeamMemberLogin onLogin={handleLogin} />
   }
 
-  if (loading) {
+  // Show loading only if auth hasn't been checked yet
+  if (!authChecked || (loading && !requisitions.length)) {
     return (
       <div className="min-vh-100 d-flex align-items-center justify-content-center">
         <div className="loading-container">
@@ -260,9 +335,18 @@ export default function RequisitionDashboard() {
                     </p>
                   </div>
                   <div className="col-auto">
-                    <button className="btn btn-outline-primary" onClick={refetch}>
-                      <i className="bi bi-arrow-clockwise me-2"></i>
-                      Refresh Data
+                    <button className="btn btn-outline-primary" onClick={refetch} disabled={loading}>
+                      {loading ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                          Refreshing...
+                        </>
+                      ) : (
+                        <>
+                          <i className="bi bi-arrow-clockwise me-2"></i>
+                          Refresh Data
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -514,6 +598,14 @@ export default function RequisitionDashboard() {
                                       <i className="bi bi-check"></i>
                                     </button>
                                     <button
+                                      className="btn btn-primary"
+                                      onClick={() => handleStatusUpdate(req.id, "completed")}
+                                      disabled={req.status !== "approved"}
+                                      title="Mark Complete"
+                                    >
+                                      <i className="bi bi-check-circle-fill"></i>
+                                    </button>
+                                    <button
                                       className="btn btn-danger"
                                       onClick={() => handleStatusUpdate(req.id, "rejected")}
                                       disabled={req.status === "completed" || req.status === "rejected"}
@@ -525,86 +617,212 @@ export default function RequisitionDashboard() {
                                 </td>
                               )}
                               <td>
-                                <button
-                                  className="btn btn-outline-primary btn-sm"
-                                  data-bs-toggle="modal"
-                                  data-bs-target={`#modal-${req.id}`}
-                                >
+                                <button className="btn btn-outline-primary btn-sm" onClick={() => openModal(req.id)}>
                                   <i className="bi bi-eye me-1"></i>
                                   View
                                 </button>
 
-                                {/* Modal for each requisition */}
+                                {/* Enhanced Modal for each requisition */}
                                 <div className="modal fade" id={`modal-${req.id}`} tabIndex={-1} aria-hidden="true">
-                                  <div className="modal-dialog modal-lg">
+                                  <div className="modal-dialog modal-xl">
                                     <div className="modal-content">
-                                      <div className="modal-header">
-                                        <h5 className="modal-title">{req.productName || "Requisition Details"}</h5>
-                                        <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
+                                      <div className="modal-header bg-primary text-white">
+                                        <h5 className="modal-title">
+                                          <i className="bi bi-file-text me-2"></i>
+                                          {req.productName || "Requisition Details"}
+                                        </h5>
+                                        <button
+                                          type="button"
+                                          className="btn-close btn-close-white"
+                                          onClick={() => closeModal(req.id)}
+                                        ></button>
                                       </div>
                                       <div className="modal-body">
-                                        <div className="row">
-                                          <div className="col-md-6 mb-3">
-                                            <label className="form-label fw-bold">Submitter Email</label>
-                                            <p className="form-control-plaintext">{req.email}</p>
-                                          </div>
-                                          <div className="col-md-6 mb-3">
-                                            <label className="form-label fw-bold">Status</label>
-                                            <div>{getStatusBadge(req.status)}</div>
-                                          </div>
-                                          <div className="col-md-6 mb-3">
-                                            <label className="form-label fw-bold">Type</label>
-                                            <p className="form-control-plaintext">{req.type}</p>
-                                          </div>
-                                          <div className="col-md-6 mb-3">
-                                            <label className="form-label fw-bold">Assigned Team</label>
-                                            <p className="form-control-plaintext">{req.assignedTeam}</p>
-                                          </div>
-                                          <div className="col-12 mb-3">
-                                            <label className="form-label fw-bold">Details</label>
-                                            <p className="form-control-plaintext">{req.details}</p>
-                                          </div>
-                                          <div className="col-md-6 mb-3">
-                                            <label className="form-label fw-bold">POC Name</label>
-                                            <p className="form-control-plaintext">{req.pocName}</p>
-                                          </div>
-                                          <div className="col-md-6 mb-3">
-                                            <label className="form-label fw-bold">POC Email</label>
-                                            <p className="form-control-plaintext">{req.pocEmail}</p>
-                                          </div>
-                                          <div className="col-md-6 mb-3">
-                                            <label className="form-label fw-bold">Estimated Start Date</label>
-                                            <p className="form-control-plaintext">{req.estimatedStartDate}</p>
-                                          </div>
-                                          <div className="col-md-6 mb-3">
-                                            <label className="form-label fw-bold">Expected Delivery Date</label>
-                                            <p className="form-control-plaintext">{req.expectedDeliveryDate}</p>
-                                          </div>
-                                          <div className="col-12 mb-3">
-                                            <label className="form-label fw-bold">Delivery Timeline</label>
-                                            <p className="form-control-plaintext">{req.deliveryTimeline}</p>
-                                          </div>
-                                          {req.requisitionBreakdown && (
-                                            <div className="col-12 mb-3">
-                                              <label className="form-label fw-bold">Requisition Breakdown</label>
-                                              <p>
-                                                <a
-                                                  href={req.requisitionBreakdown}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="btn btn-outline-primary btn-sm"
-                                                >
-                                                  <i className="bi bi-file-text me-1"></i>
-                                                  View Document
-                                                </a>
-                                              </p>
+                                        <div className="row g-4">
+                                          {/* Basic Information */}
+                                          <div className="col-12">
+                                            <div className="card">
+                                              <div className="card-header">
+                                                <h6 className="mb-0">
+                                                  <i className="bi bi-info-circle me-2"></i>Basic Information
+                                                </h6>
+                                              </div>
+                                              <div className="card-body">
+                                                <div className="row">
+                                                  <div className="col-md-6 mb-3">
+                                                    <label className="form-label fw-bold text-primary">
+                                                      Product/Course Name
+                                                    </label>
+                                                    <div className="p-2 bg-light rounded">
+                                                      {req.productName || "Not specified"}
+                                                    </div>
+                                                  </div>
+                                                  <div className="col-md-6 mb-3">
+                                                    <label className="form-label fw-bold text-primary">
+                                                      Request Type
+                                                    </label>
+                                                    <div className="p-2 bg-light rounded">
+                                                      <span className="badge bg-secondary">
+                                                        {req.type || "Not specified"}
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                  <div className="col-md-6 mb-3">
+                                                    <label className="form-label fw-bold text-primary">
+                                                      Current Status
+                                                    </label>
+                                                    <div className="p-2 bg-light rounded">
+                                                      {getStatusBadge(req.status)}
+                                                    </div>
+                                                  </div>
+                                                  <div className="col-md-6 mb-3">
+                                                    <label className="form-label fw-bold text-primary">
+                                                      Assigned Team
+                                                    </label>
+                                                    <div className="p-2 bg-light rounded">
+                                                      <span className="badge bg-info">
+                                                        {req.assignedTeam || "Not assigned"}
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
                                             </div>
-                                          )}
-                                          <div className="col-12 mb-3">
-                                            <label className="form-label fw-bold">Submitted On</label>
-                                            <p className="form-control-plaintext">
-                                              {req.timestamp ? new Date(req.timestamp).toLocaleString() : "Unknown"}
-                                            </p>
+                                          </div>
+
+                                          {/* Contact Information */}
+                                          <div className="col-12">
+                                            <div className="card">
+                                              <div className="card-header">
+                                                <h6 className="mb-0">
+                                                  <i className="bi bi-person-lines-fill me-2"></i>Contact Information
+                                                </h6>
+                                              </div>
+                                              <div className="card-body">
+                                                <div className="row">
+                                                  <div className="col-md-6 mb-3">
+                                                    <label className="form-label fw-bold text-primary">
+                                                      Submitter Email
+                                                    </label>
+                                                    <div className="p-2 bg-light rounded">
+                                                      <i className="bi bi-envelope me-2"></i>
+                                                      {req.email || "Not provided"}
+                                                    </div>
+                                                  </div>
+                                                  <div className="col-md-6 mb-3">
+                                                    <label className="form-label fw-bold text-primary">POC Name</label>
+                                                    <div className="p-2 bg-light rounded">
+                                                      <i className="bi bi-person me-2"></i>
+                                                      {req.pocName || "Not provided"}
+                                                    </div>
+                                                  </div>
+                                                  <div className="col-md-6 mb-3">
+                                                    <label className="form-label fw-bold text-primary">POC Email</label>
+                                                    <div className="p-2 bg-light rounded">
+                                                      <i className="bi bi-envelope me-2"></i>
+                                                      {req.pocEmail || "Not provided"}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* Project Details */}
+                                          <div className="col-12">
+                                            <div className="card">
+                                              <div className="card-header">
+                                                <h6 className="mb-0">
+                                                  <i className="bi bi-clipboard-data me-2"></i>Project Details
+                                                </h6>
+                                              </div>
+                                              <div className="card-body">
+                                                <div className="row">
+                                                  <div className="col-12 mb-3">
+                                                    <label className="form-label fw-bold text-primary">
+                                                      Request Details
+                                                    </label>
+                                                    <div
+                                                      className="p-3 bg-light rounded"
+                                                      style={{ minHeight: "100px" }}
+                                                    >
+                                                      {req.details || "No details provided"}
+                                                    </div>
+                                                  </div>
+                                                  <div className="col-md-6 mb-3">
+                                                    <label className="form-label fw-bold text-primary">
+                                                      Delivery Timeline
+                                                    </label>
+                                                    <div className="p-2 bg-light rounded">
+                                                      <i className="bi bi-clock me-2"></i>
+                                                      {req.deliveryTimeline || "Not specified"}
+                                                    </div>
+                                                  </div>
+                                                  <div className="col-md-6 mb-3">
+                                                    <label className="form-label fw-bold text-primary">
+                                                      Estimated Start Date
+                                                    </label>
+                                                    <div className="p-2 bg-light rounded">
+                                                      <i className="bi bi-calendar-event me-2"></i>
+                                                      {req.estimatedStartDate || "Not specified"}
+                                                    </div>
+                                                  </div>
+                                                  <div className="col-md-6 mb-3">
+                                                    <label className="form-label fw-bold text-primary">
+                                                      Expected Delivery Date
+                                                    </label>
+                                                    <div className="p-2 bg-light rounded">
+                                                      <i className="bi bi-calendar-check me-2"></i>
+                                                      {req.expectedDeliveryDate || "Not specified"}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* Additional Information */}
+                                          <div className="col-12">
+                                            <div className="card">
+                                              <div className="card-header">
+                                                <h6 className="mb-0">
+                                                  <i className="bi bi-plus-circle me-2"></i>Additional Information
+                                                </h6>
+                                              </div>
+                                              <div className="card-body">
+                                                <div className="row">
+                                                  {req.requisitionBreakdown && (
+                                                    <div className="col-md-6 mb-3">
+                                                      <label className="form-label fw-bold text-primary">
+                                                        Requisition Breakdown
+                                                      </label>
+                                                      <div className="p-2 bg-light rounded">
+                                                        <a
+                                                          href={req.requisitionBreakdown}
+                                                          target="_blank"
+                                                          rel="noopener noreferrer"
+                                                          className="btn btn-outline-primary btn-sm"
+                                                        >
+                                                          <i className="bi bi-file-text me-1"></i>
+                                                          View Document
+                                                        </a>
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                  <div className="col-md-6 mb-3">
+                                                    <label className="form-label fw-bold text-primary">
+                                                      Submission Date
+                                                    </label>
+                                                    <div className="p-2 bg-light rounded">
+                                                      <i className="bi bi-calendar3 me-2"></i>
+                                                      {req.timestamp
+                                                        ? new Date(req.timestamp).toLocaleString()
+                                                        : "Unknown"}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
@@ -615,12 +833,7 @@ export default function RequisitionDashboard() {
                                               className="btn btn-success"
                                               onClick={() => {
                                                 handleStatusUpdate(req.id, "approved")
-                                                // Close modal after action
-                                                const modal = document.getElementById(`modal-${req.id}`)
-                                                if (modal) {
-                                                  const bsModal = (window as any).bootstrap.Modal.getInstance(modal)
-                                                  if (bsModal) bsModal.hide()
-                                                }
+                                                closeModal(req.id)
                                               }}
                                               disabled={req.status === "completed" || req.status === "approved"}
                                             >
@@ -631,11 +844,7 @@ export default function RequisitionDashboard() {
                                               className="btn btn-primary"
                                               onClick={() => {
                                                 handleStatusUpdate(req.id, "completed")
-                                                const modal = document.getElementById(`modal-${req.id}`)
-                                                if (modal) {
-                                                  const bsModal = (window as any).bootstrap.Modal.getInstance(modal)
-                                                  if (bsModal) bsModal.hide()
-                                                }
+                                                closeModal(req.id)
                                               }}
                                               disabled={req.status !== "approved"}
                                             >
@@ -646,11 +855,7 @@ export default function RequisitionDashboard() {
                                               className="btn btn-danger"
                                               onClick={() => {
                                                 handleStatusUpdate(req.id, "rejected")
-                                                const modal = document.getElementById(`modal-${req.id}`)
-                                                if (modal) {
-                                                  const bsModal = (window as any).bootstrap.Modal.getInstance(modal)
-                                                  if (bsModal) bsModal.hide()
-                                                }
+                                                closeModal(req.id)
                                               }}
                                               disabled={req.status === "completed" || req.status === "rejected"}
                                             >
@@ -659,7 +864,12 @@ export default function RequisitionDashboard() {
                                             </button>
                                           </div>
                                         )}
-                                        <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">
+                                        <button
+                                          type="button"
+                                          className="btn btn-secondary"
+                                          onClick={() => closeModal(req.id)}
+                                        >
+                                          <i className="bi bi-x-lg me-1"></i>
                                           Close
                                         </button>
                                       </div>
