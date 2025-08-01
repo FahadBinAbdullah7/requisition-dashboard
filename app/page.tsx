@@ -18,23 +18,36 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CheckCircle, Clock, XCircle, FileText, LogOut, Filter, TrendingUp, AlertCircle } from "lucide-react"
+import {
+  CheckCircle,
+  Clock,
+  XCircle,
+  FileText,
+  LogOut,
+  Filter,
+  TrendingUp,
+  AlertCircle,
+  LogIn,
+  Eye,
+  UserCheck,
+} from "lucide-react"
 import { useRequisitions } from "@/hooks/use-requisitions"
 import { TeamMemberLogin } from "@/components/team-member-login"
 import { TeamManagement } from "@/components/team-management"
 
 export default function RequisitionDashboard() {
-  const [accessToken, setAccessToken] = useState<string | null>(null)
+  const [accessToken, setAccessToken] = useState<string | null>("public")
   const [user, setUser] = useState<any>(null)
   const [statusFilter, setStatusFilter] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [teamFilter, setTeamFilter] = useState("all")
-  const [selectedRequisition, setSelectedRequisition] = useState<any>(null)
+  const [showLogin, setShowLogin] = useState(false)
+  const [viewMode, setViewMode] = useState<"public" | "authenticated">("public")
 
-  const { requisitions, loading, error, updateStatus } = useRequisitions(accessToken)
+  const { requisitions, loading, error, updateStatus, refetch } = useRequisitions(accessToken)
 
-  // Check for authentication on component mount
+  // Check for existing authentication on component mount
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -43,9 +56,11 @@ export default function RequisitionDashboard() {
           const userData = await response.json()
           setUser(userData.user)
           setAccessToken(userData.accessToken)
+          setViewMode("authenticated")
         }
       } catch (err) {
-        console.error("Auth check failed:", err)
+        // Stay in public mode if auth fails
+        console.log("No existing auth, staying in public mode")
       }
     }
 
@@ -76,7 +91,7 @@ export default function RequisitionDashboard() {
       })
     }
 
-    // Filter by user role
+    // Filter by user role only if authenticated
     if (user?.role === "submitter") {
       filtered = filtered.filter((req) => req.email === user.email)
     }
@@ -90,35 +105,35 @@ export default function RequisitionDashboard() {
     switch (statusLower) {
       case "pending":
         return (
-          <Badge variant="secondary" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+          <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200 font-medium">
             <Clock className="w-3 h-3 mr-1" />
             Pending
           </Badge>
         )
       case "approved":
         return (
-          <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
+          <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200 font-medium">
             <CheckCircle className="w-3 h-3 mr-1" />
             Approved
           </Badge>
         )
       case "completed":
         return (
-          <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">
+          <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-medium">
             <CheckCircle className="w-3 h-3 mr-1" />
             Completed
           </Badge>
         )
       case "rejected":
         return (
-          <Badge variant="secondary" className="bg-red-50 text-red-700 border-red-200">
+          <Badge variant="secondary" className="bg-red-50 text-red-700 border-red-200 font-medium">
             <XCircle className="w-3 h-3 mr-1" />
             Rejected
           </Badge>
         )
       default:
         return (
-          <Badge variant="secondary" className="bg-gray-50 text-gray-700 border-gray-200">
+          <Badge variant="secondary" className="bg-gray-50 text-gray-700 border-gray-200 font-medium">
             <AlertCircle className="w-3 h-3 mr-1" />
             {status || "Pending"}
           </Badge>
@@ -139,29 +154,40 @@ export default function RequisitionDashboard() {
   const stats = getStatsForDateRange()
   const uniqueTeams = [...new Set(requisitions.map((req) => req.assignedTeam).filter(Boolean))]
 
-  if (!user || !accessToken) {
-    return (
-      <TeamMemberLogin
-        onLogin={(userData) => {
-          setUser(userData)
-          if (userData.role === "manager") {
-            setAccessToken(userData.accessToken)
-          } else {
-            setAccessToken("team-member-token")
-          }
-        }}
-      />
-    )
+  const handleLogin = (userData: any) => {
+    setUser(userData)
+    if (userData.role === "manager") {
+      setAccessToken(userData.accessToken)
+    } else {
+      setAccessToken("team-member-token")
+    }
+    setViewMode("authenticated")
+    setShowLogin(false)
+    // Refetch data with new permissions
+    refetch()
+  }
+
+  const handleLogout = () => {
+    fetch("/api/auth/logout", { method: "POST" })
+    setUser(null)
+    setAccessToken("public")
+    setViewMode("public")
+    // Refetch data for public view
+    refetch()
+  }
+
+  if (showLogin) {
+    return <TeamMemberLogin onLogin={handleLogin} />
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <Card className="w-full max-w-md shadow-lg">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
+        <Card className="w-full max-w-md shadow-xl border-0">
           <CardContent className="flex flex-col items-center justify-center p-8">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Dashboard</h3>
-            <p className="text-gray-600 text-center">Fetching your requisitions...</p>
+            <p className="text-gray-600 text-center">Fetching requisitions from Google Sheets...</p>
           </CardContent>
         </Card>
       </div>
@@ -170,18 +196,18 @@ export default function RequisitionDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-100 flex items-center justify-center">
-        <Card className="w-full max-w-md shadow-lg border-red-200">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-rose-100 flex items-center justify-center">
+        <Card className="w-full max-w-lg shadow-xl border-red-200">
           <CardHeader>
-            <CardTitle className="text-red-600 flex items-center">
-              <AlertCircle className="w-5 h-5 mr-2" />
+            <CardTitle className="text-red-600 flex items-center text-xl">
+              <AlertCircle className="w-6 h-6 mr-2" />
               Connection Error
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-gray-700 mb-4">{error}</p>
-            <div className="space-y-2">
-              <Button className="w-full" onClick={() => window.location.reload()}>
+            <p className="text-gray-700 mb-6">{error}</p>
+            <div className="space-y-3">
+              <Button className="w-full bg-red-600 hover:bg-red-700" onClick={() => window.location.reload()}>
                 Retry Connection
               </Button>
               <Button
@@ -191,6 +217,13 @@ export default function RequisitionDashboard() {
               >
                 Test API Connection
               </Button>
+              <Button
+                variant="outline"
+                className="w-full bg-transparent"
+                onClick={() => window.open("/api/debug-columns", "_blank")}
+              >
+                Debug Sheet Structure
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -199,45 +232,66 @@ export default function RequisitionDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          <div className="flex justify-between items-center py-4">
             <div className="flex items-center">
-              <div className="bg-blue-600 p-2 rounded-lg mr-4">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-3 rounded-xl mr-4 shadow-lg">
                 <FileText className="h-8 w-8 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Requisition Dashboard</h1>
-                <p className="text-sm text-gray-600">Manage and track your requests</p>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                  Requisition Dashboard
+                </h1>
+                <p className="text-sm text-gray-600">
+                  {viewMode === "public" ? "Public View - All Requisitions" : "Authenticated Dashboard"}
+                </p>
               </div>
             </div>
+
             <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                <p className="text-xs text-gray-500 capitalize">{user.role?.replace("_", " ")}</p>
-              </div>
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={user.picture || "/placeholder.svg"} />
-                <AvatarFallback className="bg-blue-100 text-blue-600">
-                  {user.name
-                    ?.split(" ")
-                    .map((n: string) => n[0])
-                    .join("") || "U"}
-                </AvatarFallback>
-              </Avatar>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  fetch("/api/auth/logout", { method: "POST" })
-                  window.location.reload()
-                }}
-                className="text-gray-600 hover:text-gray-900"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
+              {viewMode === "public" ? (
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowLogin(true)}
+                    className="bg-white/50 hover:bg-white/80 border-blue-200"
+                  >
+                    <LogIn className="h-4 w-4 mr-2" />
+                    Team Login
+                  </Button>
+                  <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200 px-3 py-1">
+                    <Eye className="h-3 w-3 mr-1" />
+                    Public View
+                  </Badge>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-4">
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-gray-900">{user?.name}</p>
+                    <p className="text-xs text-gray-500 capitalize">{user?.role?.replace("_", " ")}</p>
+                  </div>
+                  <Avatar className="h-10 w-10 ring-2 ring-blue-100">
+                    <AvatarImage src={user?.picture || "/placeholder.svg"} />
+                    <AvatarFallback className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold">
+                      {user?.name
+                        ?.split(" ")
+                        .map((n: string) => n[0])
+                        .join("") || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleLogout}
+                    className="text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -245,7 +299,7 @@ export default function RequisitionDashboard() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Filters */}
-        <Card className="mb-8 shadow-sm">
+        <Card className="mb-8 shadow-lg border-0 bg-white/70 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center text-lg">
               <Filter className="h-5 w-5 mr-2 text-blue-600" />
@@ -255,7 +309,7 @@ export default function RequisitionDashboard() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div>
-                <Label htmlFor="dateFrom" className="text-sm font-medium">
+                <Label htmlFor="dateFrom" className="text-sm font-medium text-gray-700">
                   From Date
                 </Label>
                 <Input
@@ -263,11 +317,11 @@ export default function RequisitionDashboard() {
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="mt-1"
+                  className="mt-1 bg-white/50"
                 />
               </div>
               <div>
-                <Label htmlFor="dateTo" className="text-sm font-medium">
+                <Label htmlFor="dateTo" className="text-sm font-medium text-gray-700">
                   To Date
                 </Label>
                 <Input
@@ -275,13 +329,13 @@ export default function RequisitionDashboard() {
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="mt-1"
+                  className="mt-1 bg-white/50"
                 />
               </div>
               <div>
-                <Label className="text-sm font-medium">Status</Label>
+                <Label className="text-sm font-medium text-gray-700">Status</Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className="mt-1 bg-white/50">
                     <SelectValue placeholder="All Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -294,9 +348,9 @@ export default function RequisitionDashboard() {
                 </Select>
               </div>
               <div>
-                <Label className="text-sm font-medium">Team</Label>
+                <Label className="text-sm font-medium text-gray-700">Team</Label>
                 <Select value={teamFilter} onValueChange={setTeamFilter}>
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className="mt-1 bg-white/50">
                     <SelectValue placeholder="All Teams" />
                   </SelectTrigger>
                   <SelectContent>
@@ -318,7 +372,7 @@ export default function RequisitionDashboard() {
                     setStatusFilter("all")
                     setTeamFilter("all")
                   }}
-                  className="w-full"
+                  className="w-full bg-white/50 hover:bg-white/80"
                 >
                   Clear All
                 </Button>
@@ -328,37 +382,44 @@ export default function RequisitionDashboard() {
         </Card>
 
         <Tabs defaultValue="dashboard" className="space-y-6">
-          {user.role === "manager" ? (
-            <TabsList className="grid w-full grid-cols-3 bg-white shadow-sm">
+          {viewMode === "authenticated" && user?.role === "manager" ? (
+            <TabsList className="grid w-full grid-cols-3 bg-white/70 backdrop-blur-sm shadow-lg border-0">
               <TabsTrigger
                 value="dashboard"
-                className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700"
+                className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg"
               >
                 Dashboard
               </TabsTrigger>
               <TabsTrigger
                 value="requisitions"
-                className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700"
+                className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg"
               >
                 All Requisitions
               </TabsTrigger>
-              <TabsTrigger value="teams" className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
+              <TabsTrigger
+                value="teams"
+                className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg"
+              >
                 Team Management
               </TabsTrigger>
             </TabsList>
           ) : (
-            <TabsList className="grid w-full grid-cols-2 bg-white shadow-sm">
+            <TabsList className="grid w-full grid-cols-2 bg-white/70 backdrop-blur-sm shadow-lg border-0">
               <TabsTrigger
                 value="dashboard"
-                className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700"
+                className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg"
               >
-                Dashboard
+                Overview
               </TabsTrigger>
               <TabsTrigger
                 value="requisitions"
-                className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700"
+                className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg"
               >
-                My Requisitions
+                {viewMode === "public"
+                  ? "All Requisitions"
+                  : user?.role === "submitter"
+                    ? "My Requisitions"
+                    : "All Requisitions"}
               </TabsTrigger>
             </TabsList>
           )}
@@ -367,7 +428,7 @@ export default function RequisitionDashboard() {
           <TabsContent value="dashboard" className="space-y-6">
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-              <Card className="shadow-sm hover:shadow-md transition-shadow">
+              <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-0 bg-white/70 backdrop-blur-sm">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600">Total Requests</CardTitle>
                   <div className="bg-blue-100 p-2 rounded-full">
@@ -380,22 +441,22 @@ export default function RequisitionDashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm hover:shadow-md transition-shadow">
+              <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-0 bg-white/70 backdrop-blur-sm">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600">Pending</CardTitle>
-                  <div className="bg-yellow-100 p-2 rounded-full">
-                    <Clock className="h-4 w-4 text-yellow-600" />
+                  <div className="bg-amber-100 p-2 rounded-full">
+                    <Clock className="h-4 w-4 text-amber-600" />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-yellow-600">{stats.pending}</div>
+                  <div className="text-3xl font-bold text-amber-600">{stats.pending}</div>
                   <p className="text-xs text-gray-500 mt-1">
                     {stats.total > 0 ? `${Math.round((stats.pending / stats.total) * 100)}%` : "0%"} of total
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm hover:shadow-md transition-shadow">
+              <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-0 bg-white/70 backdrop-blur-sm">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600">Approved</CardTitle>
                   <div className="bg-blue-100 p-2 rounded-full">
@@ -410,22 +471,22 @@ export default function RequisitionDashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm hover:shadow-md transition-shadow">
+              <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-0 bg-white/70 backdrop-blur-sm">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600">Completed</CardTitle>
-                  <div className="bg-green-100 p-2 rounded-full">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  <div className="bg-emerald-100 p-2 rounded-full">
+                    <CheckCircle className="h-4 w-4 text-emerald-600" />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-green-600">{stats.completed}</div>
+                  <div className="text-3xl font-bold text-emerald-600">{stats.completed}</div>
                   <p className="text-xs text-gray-500 mt-1">
                     {stats.total > 0 ? `${Math.round((stats.completed / stats.total) * 100)}%` : "0%"} of total
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm hover:shadow-md transition-shadow">
+              <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-0 bg-white/70 backdrop-blur-sm">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600">Rejected</CardTitle>
                   <div className="bg-red-100 p-2 rounded-full">
@@ -442,14 +503,18 @@ export default function RequisitionDashboard() {
             </div>
 
             {/* Recent Requisitions */}
-            <Card className="shadow-sm">
+            <Card className="shadow-lg border-0 bg-white/70 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <TrendingUp className="h-5 w-5 mr-2 text-blue-600" />
                   Recent Requisitions
                 </CardTitle>
                 <CardDescription>
-                  {user.role === "submitter" ? "Your recent submissions" : "Latest requisition requests"}
+                  {viewMode === "public"
+                    ? "Latest requisition requests from all teams"
+                    : user?.role === "submitter"
+                      ? "Your recent submissions"
+                      : "Latest requisition requests"}
                   {(dateFrom || dateTo) && " (filtered by date range)"}
                 </CardDescription>
               </CardHeader>
@@ -458,19 +523,20 @@ export default function RequisitionDashboard() {
                   <div className="text-center py-12">
                     <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No requisitions found</h3>
-                    <p className="text-gray-600">
+                    <p className="text-gray-600 mb-4">
                       {requisitions.length === 0
                         ? "No data found in your Google Sheet. Make sure your sheet has data and is properly configured."
                         : "No requisitions match your current filters. Try adjusting your search criteria."}
                     </p>
                     {requisitions.length === 0 && (
-                      <Button
-                        variant="outline"
-                        className="mt-4 bg-transparent"
-                        onClick={() => window.open("/api/test-connection", "_blank")}
-                      >
-                        Test Sheet Connection
-                      </Button>
+                      <div className="space-y-2">
+                        <Button variant="outline" onClick={() => window.open("/api/test-connection", "_blank")}>
+                          Test Sheet Connection
+                        </Button>
+                        <Button variant="outline" onClick={() => window.open("/api/debug-columns", "_blank")}>
+                          Debug Sheet Structure
+                        </Button>
+                      </div>
                     )}
                   </div>
                 ) : (
@@ -478,7 +544,7 @@ export default function RequisitionDashboard() {
                     {filteredRequisitions.slice(0, 10).map((req) => (
                       <div
                         key={req.id}
-                        className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                        className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-white/50 transition-all duration-200 hover:shadow-md"
                       >
                         <div className="flex-1">
                           <h4 className="font-semibold text-gray-900">{req.productName || "Untitled Request"}</h4>
@@ -492,9 +558,36 @@ export default function RequisitionDashboard() {
                         </div>
                         <div className="flex items-center space-x-3">
                           {getStatusBadge(req.status)}
+
+                          {/* Action buttons for team members and managers */}
+                          {(user?.role === "team_member" || user?.role === "manager") && (
+                            <div className="flex space-x-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => updateStatus(req.id, "approved")}
+                                disabled={req.status === "completed" || req.status === "approved"}
+                                className="text-xs bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                              >
+                                <UserCheck className="h-3 w-3 mr-1" />
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => updateStatus(req.id, "rejected")}
+                                disabled={req.status === "completed" || req.status === "rejected"}
+                                className="text-xs bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                              >
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Reject
+                              </Button>
+                            </div>
+                          )}
+
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button variant="outline" size="sm" className="hover:bg-blue-50 bg-transparent">
+                              <Button variant="outline" size="sm" className="hover:bg-blue-50 bg-white/50">
                                 View Details
                               </Button>
                             </DialogTrigger>
@@ -575,14 +668,15 @@ export default function RequisitionDashboard() {
                                     {req.timestamp ? new Date(req.timestamp).toLocaleString() : "Unknown"}
                                   </p>
                                 </div>
-                                {(user.role === "team_member" || user.role === "manager") && (
+                                {(user?.role === "team_member" || user?.role === "manager") && (
                                   <div className="flex space-x-2 pt-4 border-t border-gray-200">
                                     <Button
                                       size="sm"
                                       onClick={() => updateStatus(req.id, "approved")}
-                                      disabled={req.status === "completed"}
-                                      className="bg-blue-600 hover:bg-blue-700"
+                                      disabled={req.status === "completed" || req.status === "approved"}
+                                      className="bg-green-600 hover:bg-green-700"
                                     >
+                                      <UserCheck className="h-4 w-4 mr-1" />
                                       Approve
                                     </Button>
                                     <Button
@@ -590,17 +684,19 @@ export default function RequisitionDashboard() {
                                       variant="outline"
                                       onClick={() => updateStatus(req.id, "completed")}
                                       disabled={req.status !== "approved"}
-                                      className="border-green-200 text-green-700 hover:bg-green-50"
+                                      className="border-blue-200 text-blue-700 hover:bg-blue-50"
                                     >
+                                      <CheckCircle className="h-4 w-4 mr-1" />
                                       Mark Complete
                                     </Button>
                                     <Button
                                       size="sm"
                                       variant="outline"
                                       onClick={() => updateStatus(req.id, "rejected")}
-                                      disabled={req.status === "completed"}
+                                      disabled={req.status === "completed" || req.status === "rejected"}
                                       className="border-red-200 text-red-700 hover:bg-red-50"
                                     >
+                                      <XCircle className="h-4 w-4 mr-1" />
                                       Reject
                                     </Button>
                                   </div>
@@ -619,11 +715,15 @@ export default function RequisitionDashboard() {
 
           {/* All Requisitions Tab */}
           <TabsContent value="requisitions" className="space-y-6">
-            <Card className="shadow-sm">
+            <Card className="shadow-lg border-0 bg-white/70 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <FileText className="h-5 w-5 mr-2 text-blue-600" />
-                  {user.role === "submitter" ? "My Requisitions" : "All Requisitions"}
+                  {viewMode === "public"
+                    ? "All Requisitions"
+                    : user?.role === "submitter"
+                      ? "My Requisitions"
+                      : "All Requisitions"}
                 </CardTitle>
                 <CardDescription>
                   Showing {filteredRequisitions.length} of {requisitions.length} requisitions
@@ -645,19 +745,21 @@ export default function RequisitionDashboard() {
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
-                        <TableRow className="bg-gray-50">
+                        <TableRow className="bg-gray-50/50">
                           <TableHead className="font-semibold">Product/Course</TableHead>
                           <TableHead className="font-semibold">Type</TableHead>
                           <TableHead className="font-semibold">Submitter</TableHead>
                           <TableHead className="font-semibold">Team</TableHead>
                           <TableHead className="font-semibold">Status</TableHead>
                           <TableHead className="font-semibold">Submitted</TableHead>
-                          <TableHead className="font-semibold">Actions</TableHead>
+                          {(user?.role === "team_member" || user?.role === "manager") && (
+                            <TableHead className="font-semibold">Actions</TableHead>
+                          )}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredRequisitions.map((req) => (
-                          <TableRow key={req.id} className="hover:bg-gray-50">
+                          <TableRow key={req.id} className="hover:bg-white/50">
                             <TableCell className="font-medium">{req.productName || "Untitled"}</TableCell>
                             <TableCell>{req.type}</TableCell>
                             <TableCell>{req.email}</TableCell>
@@ -666,32 +768,30 @@ export default function RequisitionDashboard() {
                             <TableCell>
                               {req.timestamp ? new Date(req.timestamp).toLocaleDateString() : "Unknown"}
                             </TableCell>
-                            <TableCell>
-                              <div className="flex space-x-1">
-                                {(user.role === "team_member" || user.role === "manager") && (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => updateStatus(req.id, "approved")}
-                                      disabled={req.status === "completed"}
-                                      className="text-xs"
-                                    >
-                                      Approve
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => updateStatus(req.id, "completed")}
-                                      disabled={req.status !== "approved"}
-                                      className="text-xs"
-                                    >
-                                      Complete
-                                    </Button>
-                                  </>
-                                )}
-                              </div>
-                            </TableCell>
+                            {(user?.role === "team_member" || user?.role === "manager") && (
+                              <TableCell>
+                                <div className="flex space-x-1">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => updateStatus(req.id, "approved")}
+                                    disabled={req.status === "completed" || req.status === "approved"}
+                                    className="text-xs bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                                  >
+                                    Approve
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => updateStatus(req.id, "rejected")}
+                                    disabled={req.status === "completed" || req.status === "rejected"}
+                                    className="text-xs bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                                  >
+                                    Reject
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
                           </TableRow>
                         ))}
                       </TableBody>
@@ -702,7 +802,7 @@ export default function RequisitionDashboard() {
             </Card>
           </TabsContent>
 
-          {user.role === "manager" && (
+          {viewMode === "authenticated" && user?.role === "manager" && (
             <TabsContent value="teams" className="space-y-6">
               <TeamManagement />
             </TabsContent>
