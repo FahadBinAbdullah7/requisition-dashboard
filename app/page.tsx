@@ -158,41 +158,42 @@ export default function RequisitionDashboard() {
   }
 
   const openModal = (reqId: string) => {
-    const modalElement = document.getElementById(`modal-${reqId}`)
-    if (modalElement) {
-      // Create modal instance if Bootstrap is loaded
-      if (typeof window !== "undefined" && (window as any).bootstrap) {
-        const modal = new (window as any).bootstrap.Modal(modalElement)
-        modal.show()
-      } else {
-        // Fallback: show modal manually
-        modalElement.style.display = "block"
-        modalElement.classList.add("show")
-        document.body.classList.add("modal-open")
+  const modalElement = document.getElementById(`modal-${reqId}`);
+  if (modalElement) {
+    if (typeof window !== "undefined" && (window as any).bootstrap) {
+      const modal = new (window as any).bootstrap.Modal(modalElement);
+      modal.show();
+    } else {
+      // Remove any existing backdrops before adding a new one
+      document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
 
-        // Add backdrop
-        const backdrop = document.createElement("div")
-        backdrop.className = "modal-backdrop fade show"
-        backdrop.id = `backdrop-${reqId}`
-        document.body.appendChild(backdrop)
-      }
+      modalElement.style.display = "block";
+      modalElement.classList.add("show");
+      document.body.classList.add("modal-open");
+
+      // Add backdrop
+      const backdrop = document.createElement("div");
+      backdrop.className = "modal-backdrop fade show";
+      backdrop.id = `backdrop-${reqId}`;
+      document.body.appendChild(backdrop);
     }
   }
+};
 
   const closeModal = (reqId: string) => {
-  const modalElement = document.getElementById(`modal-${reqId}`)
+  const modalElement = document.getElementById(`modal-${reqId}`);
 
   if (modalElement) {
-    modalElement.style.display = "none"
-    modalElement.classList.remove("show")
+    modalElement.style.display = "none";
+    modalElement.classList.remove("show");
   }
 
   // Always remove modal-open from body
-  document.body.classList.remove("modal-open")
+  document.body.classList.remove("modal-open");
 
-  // Remove all backdrops (in case of multiple modals)
-  document.querySelectorAll('.modal-backdrop').forEach(el => el.remove())
-}
+  // Remove all modal backdrops (in case of multiple modals)
+  document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+};
 
   // Show login component if explicitly requested
   if (showLogin) {
