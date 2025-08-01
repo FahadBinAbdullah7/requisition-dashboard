@@ -4,7 +4,21 @@ import { GoogleSheetsIntegration } from "@/lib/google-sheets-integration"
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization")
-    const accessToken = authHeader?.replace("Bearer ", "")
+    const teamMemberSession = request.cookies.get("team_member_session")?.value
+    const managerAccessToken = request.cookies.get("access_token")?.value
+
+    // Handle team member authentication
+    if (teamMemberSession) {
+      // For team members, we need to use a service account or manager's token
+      // Since team members don't have Google Sheets access, we'll use a fallback
+      if (!managerAccessToken) {
+        // Return mock data or use service account
+        return NextResponse.json([])
+      }
+    }
+
+    // Handle manager authentication
+    const accessToken = authHeader?.replace("Bearer ", "") || managerAccessToken
 
     if (!accessToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -16,7 +30,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(requisitions)
   } catch (error) {
     console.error("Error fetching requisitions:", error)
-    return NextResponse.json({ error: "Failed to fetch requisitions" }, { status: 500 })
+
+    // Return more detailed error information
+    return NextResponse.json(
+      {
+        error: "Failed to fetch requisitions",
+        details: error instanceof Error ? error.message : "Unknown error",
+        suggestion: "Please check your Google Sheets API key and permissions",
+      },
+      { status: 500 },
+    )
   }
 }
 
