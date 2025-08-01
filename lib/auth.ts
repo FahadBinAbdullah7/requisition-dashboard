@@ -40,20 +40,18 @@ export class AuthService {
   }
 
   async getUserRole(email: string): Promise<string> {
-    // This should check against your team member database
-    // For now, return based on email domain or hardcoded list
-    const managers = ["manager@company.com"]
+    // List of managers and team members
+    const managers = ["akram@10minuteschool.com"]
     const teamMembers = [
-      "alice@company.com",
-      "bob@company.com",
-      "carol@company.com",
-      "david@company.com",
-      "eve@company.com",
-      "frank@company.com",
-      "grace@company.com",
-      "henry@company.com",
+      "umama@10minuteschool.com", "shafqat@10minuteschool.com", "refat@10minuteschool.com", "nafish@10minuteschool.com",
+      "sakibul@10minuteschool.com", "alamin@10minuteschool.com", "mahedi.tuhin@10minuteschool.com", "sagor@10minuteschool.com",
+      "homaira@10minuteschool.com", "gm.mehedi@10minuteschool.com", "asif.khan@10minuteschool.com", "mehedi.shuvo@10minuteschool.com",
+      "mdjunayetalama@gmail.com", "rasel@10minuteschool.com", "mdabdullah@10minuteschool.com", "naziha@10minuteschool.com",
+      "yeasin@10minuteschool.com", "zafir@10minuteschool.com", "nayem.ahmed@10minuteschool.com", "sojib@10minuteschool.com",
+      "hasib@10minuteschool.com"
     ]
 
+    // Determine the user role based on the email
     if (managers.includes(email)) {
       return "manager"
     } else if (teamMembers.includes(email)) {
