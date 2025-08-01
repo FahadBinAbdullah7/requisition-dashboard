@@ -1,4 +1,3 @@
-// Enhanced Google Sheets API integration with proper column mapping and status updates
 export interface RequisitionData {
   id: string
   timestamp: string
@@ -16,6 +15,14 @@ export interface RequisitionData {
   status: string
 }
 
+export interface PaginatedRequisitions {
+  data: RequisitionData[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
 export class GoogleSheetsIntegration {
   private accessToken: string | null
   private apiKey: string | null
@@ -27,17 +34,17 @@ export class GoogleSheetsIntegration {
     this.spreadsheetId = "1wbuI0ZlGaXgEuUnGi3HVqZ38R8gA9-vnG0UnIqDPu4o"
   }
 
-  async getRequisitions(): Promise<RequisitionData[]> {
+  async getRequisitions(page: number = 1, pageSize: number = 10): Promise<PaginatedRequisitions> {
     try {
       console.log("=== FETCHING REQUISITIONS ===")
       console.log("Spreadsheet ID:", this.spreadsheetId)
       console.log("API Key present:", !!this.apiKey)
+      console.log("Page:", page, "Page Size:", pageSize)
 
       if (!this.apiKey) {
         throw new Error("No Google Sheets API key found")
       }
 
-      // Get all data from the sheet (A to CE columns)
       const range = "A:CE"
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/${encodeURIComponent(range)}?key=${this.apiKey}`
 
@@ -60,15 +67,19 @@ export class GoogleSheetsIntegration {
 
       if (rows.length <= 1) {
         console.log("No data rows found")
-        return []
+        return {
+          data: [],
+          total: 0,
+          page,
+          pageSize,
+          totalPages: 0,
+        }
       }
 
-      // Skip header row and process data
       const dataRows = rows.slice(1)
 
-      const processedData = dataRows
+      let processedData = dataRows
         .map((row: string[], index: number) => {
-          // Map columns based on your Google Form structure
           const requisition: RequisitionData = {
             id: (index + 1).toString(),
             timestamp: row[0] || "",
@@ -82,11 +93,10 @@ export class GoogleSheetsIntegration {
             requisitionBreakdown: row[8] || "",
             estimatedStartDate: row[9] || "",
             expectedDeliveryDate: row[10] || "",
-            pocName: row[11] || "", // Adjust based on your actual column
-            status: row[82] || "pending", // Column CE (82 in 0-indexed)
+            pocName: row[11] || "",
+            status: row[82] || "pending",
           }
 
-          // Log first few items for debugging
           if (index < 2) {
             console.log(`Processed row ${index + 1}:`, {
               id: requisition.id,
@@ -99,10 +109,39 @@ export class GoogleSheetsIntegration {
 
           return requisition
         })
-        .filter((req) => req.timestamp && req.email) // Filter out empty rows
+        .filter((req) => req.timestamp || req.email) // Loosened filter to include rows with either timestamp or email
 
-      console.log("Final processed data count:", processedData.length)
-      return processedData
+      console.log("Total processed rows before sorting:", processedData.length)
+
+      // Sort by timestamp (latest first)
+      processedData = processedData.sort((a, b) => {
+        try {
+          const dateA = a.timestamp ? new Date(a.timestamp) : new Date(0)
+          const dateB = b.timestamp ? new Date(b.timestamp) : new Date(0)
+          return dateB.getTime() - dateA.getTime() // Descending order
+        } catch (e) {
+          console.error(`Invalid timestamp: ${a.timestamp} or ${b.timestamp}`, e)
+          return 0 // Keep original order for invalid timestamps
+        }
+      })
+
+      console.log("Data sorted by timestamp (descending)")
+
+      // Apply pagination
+      const total = processedData.length
+      const totalPages = Math.ceil(total / pageSize)
+      const startIndex = (page - 1) * pageSize
+      const endIndex = startIndex + pageSize
+      const paginatedData = processedData.slice(startIndex, endIndex)
+
+      console.log("Paginated data count:", paginatedData.length)
+      return {
+        data: paginatedData,
+        total,
+        page,
+        pageSize,
+        totalPages,
+      }
     } catch (error) {
       console.error("Error in getRequisitions:", error)
       throw error
@@ -116,13 +155,11 @@ export class GoogleSheetsIntegration {
       console.log("New status:", status)
       console.log("Access token present:", !!this.accessToken)
 
-      // For team members without OAuth, we'll simulate the update
       if (!this.accessToken || this.accessToken === "team-member-token") {
         console.log("Team member update - simulating success")
         return true
       }
 
-      // For managers with OAuth tokens, actually update the sheet
       const range = `CE${rowIndex + 2}` // CE column, +2 for header and 1-indexed
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`
 
