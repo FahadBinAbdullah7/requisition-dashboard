@@ -181,7 +181,6 @@ export default function RequisitionDashboard() {
 
  const closeModal = (reqId: string) => {
   const modalElement = document.getElementById(`modal-${reqId}`)
-  const backdrop = document.getElementById(`backdrop-${reqId}`)
 
   if (modalElement) {
     modalElement.style.display = "none"
