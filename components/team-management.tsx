@@ -1,25 +1,7 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Edit, Users } from "lucide-react"
 
 interface TeamMember {
   id: string
@@ -33,7 +15,7 @@ interface TeamMember {
 
 export function TeamManagement() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [formData, setFormData] = useState({
     name: "",
@@ -77,7 +59,7 @@ export function TeamManagement() {
 
       if (response.ok) {
         await fetchTeamMembers()
-        setIsDialogOpen(false)
+        setIsModalOpen(false)
         setEditingMember(null)
         setFormData({ name: "", email: "", password: "", team: "" })
       }
@@ -91,10 +73,10 @@ export function TeamManagement() {
     setFormData({
       name: member.name,
       email: member.email,
-      password: "", // Don't pre-fill password for security
+      password: "",
       team: member.team,
     })
-    setIsDialogOpen(true)
+    setIsModalOpen(true)
   }
 
   const handleDelete = async (id: string) => {
@@ -116,137 +98,166 @@ export function TeamManagement() {
   const resetForm = () => {
     setFormData({ name: "", email: "", password: "", team: "" })
     setEditingMember(null)
+    setIsModalOpen(false)
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle className="flex items-center">
-              <Users className="h-5 w-5 mr-2" />
-              Team Management
-            </CardTitle>
-            <CardDescription>Manage team members and their access credentials</CardDescription>
+    <div className="card">
+      <div className="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <h5 className="mb-1">
+            <i className="bi bi-people me-2"></i>
+            Team Management
+          </h5>
+          <p className="text-muted mb-0">Manage team members and their access credentials</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+          <i className="bi bi-plus-circle me-2"></i>
+          Add Team Member
+        </button>
+      </div>
+      <div className="card-body">
+        {teamMembers.length === 0 ? (
+          <div className="text-center py-5">
+            <i className="bi bi-people text-muted" style={{ fontSize: "4rem" }}></i>
+            <h4 className="text-muted mt-3">No team members found</h4>
+            <p className="text-muted">Add your first team member above.</p>
           </div>
-          <Dialog
-            open={isDialogOpen}
-            onOpenChange={(open) => {
-              setIsDialogOpen(open)
-              if (!open) resetForm()
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Team Member
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{editingMember ? "Edit Team Member" : "Add New Team Member"}</DialogTitle>
-                <DialogDescription>
-                  {editingMember ? "Update team member information" : "Create a new team member account"}
-                </DialogDescription>
-              </DialogHeader>
+        ) : (
+          <div className="table-responsive">
+            <table className="table table-hover">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Team</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teamMembers.map((member) => (
+                  <tr key={member.id}>
+                    <td>
+                      <strong>{member.name}</strong>
+                    </td>
+                    <td>{member.email}</td>
+                    <td>
+                      <span className="badge bg-info">{member.team}</span>
+                    </td>
+                    <td>
+                      <span className={`badge ${member.isActive ? "bg-success" : "bg-secondary"}`}>
+                        {member.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td>{new Date(member.createdAt).toLocaleDateString()}</td>
+                    <td>
+                      <div className="btn-group btn-group-sm">
+                        <button className="btn btn-outline-primary" onClick={() => handleEdit(member)} title="Edit">
+                          <i className="bi bi-pencil"></i>
+                        </button>
+                        <button
+                          className="btn btn-outline-danger"
+                          onClick={() => handleDelete(member.id)}
+                          title="Delete"
+                        >
+                          <i className="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">{editingMember ? "Edit Team Member" : "Add New Team Member"}</h5>
+                <button type="button" className="btn-close" onClick={resetForm}></button>
+              </div>
               <form onSubmit={handleSubmit}>
-                <div className="grid gap-4 py-4">
-                  <div>
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input
+                <div className="modal-body">
+                  <div className="mb-3">
+                    <label htmlFor="name" className="form-label">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
                       id="name"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
+                  <div className="mb-3">
+                    <label htmlFor="email" className="form-label">
+                      Email
+                    </label>
+                    <input
                       type="email"
+                      className="form-control"
+                      id="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
+                  <div className="mb-3">
+                    <label htmlFor="password" className="form-label">
+                      Password
+                    </label>
+                    <input
                       type="password"
+                      className="form-control"
+                      id="password"
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       required={!editingMember}
                       placeholder={editingMember ? "Leave blank to keep current password" : "Enter password"}
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="team">Team</Label>
-                    <Select value={formData.team} onValueChange={(value) => setFormData({ ...formData, team: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a team" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {teams.map((team) => (
-                          <SelectItem key={team} value={team}>
-                            {team}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="mb-3">
+                    <label htmlFor="team" className="form-label">
+                      Team
+                    </label>
+                    <select
+                      className="form-select"
+                      id="team"
+                      value={formData.team}
+                      onChange={(e) => setFormData({ ...formData, team: e.target.value })}
+                      required
+                    >
+                      <option value="">Select a team</option>
+                      {teams.map((team) => (
+                        <option key={team} value={team}>
+                          {team}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button type="submit">{editingMember ? "Update" : "Create"} Team Member</Button>
-                </DialogFooter>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={resetForm}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    {editingMember ? "Update" : "Create"} Team Member
+                  </button>
+                </div>
               </form>
-            </DialogContent>
-          </Dialog>
+            </div>
+          </div>
         </div>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Team</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {teamMembers.map((member) => (
-              <TableRow key={member.id}>
-                <TableCell className="font-medium">{member.name}</TableCell>
-                <TableCell>{member.email}</TableCell>
-                <TableCell>{member.team}</TableCell>
-                <TableCell>
-                  <Badge variant={member.isActive ? "default" : "secondary"}>
-                    {member.isActive ? "Active" : "Inactive"}
-                  </Badge>
-                </TableCell>
-                <TableCell>{new Date(member.createdAt).toLocaleDateString()}</TableCell>
-                <TableCell>
-                  <div className="flex space-x-2">
-                    <Button size="sm" variant="outline" onClick={() => handleEdit(member)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => handleDelete(member.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        {teamMembers.length === 0 && (
-          <div className="text-center py-8 text-gray-500">No team members found. Add your first team member above.</div>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </div>
   )
 }
