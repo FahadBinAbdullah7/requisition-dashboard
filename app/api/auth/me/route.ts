@@ -1,10 +1,27 @@
 import { type NextRequest, NextResponse } from "next/server"
+import TeamAuthService from "@/lib/team-auth"
 
 export async function GET(request: NextRequest) {
   try {
     const accessToken = request.cookies.get("access_token")?.value
     const userEmail = request.cookies.get("user_email")?.value
+    const teamMemberSession = request.cookies.get("team_member_session")?.value
 
+    // Handle team member authentication
+    if (teamMemberSession) {
+      const authService = new TeamAuthService()
+      const teamMembers = authService.getAllTeamMembers()
+      const teamMember = teamMembers.find((m) => m.id === teamMemberSession)
+
+      if (teamMember) {
+        return NextResponse.json({
+          user: teamMember,
+          accessToken: "team-member-token", // Placeholder token
+        })
+      }
+    }
+
+    // Handle manager authentication
     if (!accessToken || !userEmail) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
@@ -25,21 +42,9 @@ export async function GET(request: NextRequest) {
     // Determine user role based on email
     const getUserRole = (email: string): string => {
       const managers = ["manager@company.com", "admin@company.com"]
-      const teamMembers = [
-        "alice@company.com",
-        "bob@company.com",
-        "carol@company.com",
-        "david@company.com",
-        "eve@company.com",
-        "frank@company.com",
-        "grace@company.com",
-        "henry@company.com",
-      ]
 
       if (managers.includes(email)) {
         return "manager"
-      } else if (teamMembers.includes(email)) {
-        return "team_member"
       } else {
         return "submitter"
       }
