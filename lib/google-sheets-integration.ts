@@ -24,7 +24,7 @@ export class GoogleSheetsIntegration {
   constructor(accessToken?: string) {
     this.accessToken = accessToken || null
     this.apiKey = process.env.GOOGLE_SHEETS_API_KEY || null
-    this.spreadsheetId = "1sxvfRTotejH8teKTOB27Eqqr00YR6LEsr6PBj58Iuns"
+    this.spreadsheetId = "1wbuI0ZlGaXgEuUnGi3HVqZ38R8gA9-vnG0UnIqDPu4o"
   }
 
   async getRequisitions(): Promise<RequisitionData[]> {
