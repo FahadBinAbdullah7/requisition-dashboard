@@ -1,4 +1,4 @@
-// Enhanced Google Sheets API integration with better debugging
+// Enhanced Google Sheets API integration with proper column mapping
 export interface RequisitionData {
   id: string
   timestamp: string
@@ -32,90 +32,44 @@ export class GoogleSheetsIntegration {
       console.log("=== FETCHING REQUISITIONS ===")
       console.log("Spreadsheet ID:", this.spreadsheetId)
       console.log("API Key present:", !!this.apiKey)
-      console.log("Access Token present:", !!this.accessToken)
 
-      // First, let's get the sheet metadata to see available sheets
-      let metadataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}`
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
+      if (!this.apiKey) {
+        throw new Error("No Google Sheets API key found")
       }
 
-      if (this.accessToken && this.accessToken !== "team-member-token") {
-        headers.Authorization = `Bearer ${this.accessToken}`
-      } else if (this.apiKey) {
-        metadataUrl += `?key=${this.apiKey}`
-      } else {
-        throw new Error("No authentication method available")
+      // Get all data from the sheet (A to CE columns)
+      const range = "A:CE"
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/${encodeURIComponent(range)}?key=${this.apiKey}`
+
+      console.log("Fetching from URL:", url)
+      const response = await fetch(url)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("API Error:", errorText)
+        throw new Error(`Google Sheets API error: ${response.status} - ${errorText}`)
       }
 
-      console.log("Fetching metadata from:", metadataUrl)
-      const metadataResponse = await fetch(metadataUrl, { headers })
-
-      if (!metadataResponse.ok) {
-        const errorText = await metadataResponse.text()
-        console.error("Metadata fetch failed:", errorText)
-        throw new Error(`Cannot access spreadsheet: ${metadataResponse.status} ${errorText}`)
-      }
-
-      const metadata = await metadataResponse.json()
-      const availableSheets = metadata.sheets?.map((s: any) => s.properties.title) || []
-      console.log("Available sheets:", availableSheets)
-
-      // Determine the correct sheet name
-      let sheetName = "Form Responses 1"
-      if (!availableSheets.includes(sheetName)) {
-        // Try alternative names
-        const alternatives = ["Form responses 1", "Sheet1", availableSheets[0]]
-        sheetName = alternatives.find((name) => availableSheets.includes(name)) || "Sheet1"
-      }
-
-      console.log("Using sheet name:", sheetName)
-
-      // Now fetch the actual data
-      const range = `'${sheetName}'!A:CE`
-      let dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/${encodeURIComponent(range)}`
-
-      if (this.accessToken && this.accessToken !== "team-member-token") {
-        // Use OAuth token
-      } else if (this.apiKey) {
-        dataUrl += `?key=${this.apiKey}`
-      }
-
-      console.log("Fetching data from:", dataUrl)
-      const dataResponse = await fetch(dataUrl, { headers })
-
-      if (!dataResponse.ok) {
-        const errorText = await dataResponse.text()
-        console.error("Data fetch failed:", errorText)
-        throw new Error(`Failed to fetch data: ${dataResponse.status} ${errorText}`)
-      }
-
-      const data = await dataResponse.json()
+      const data = await response.json()
       const rows = data.values || []
 
       console.log("Raw data received:")
       console.log("- Total rows:", rows.length)
-      console.log("- First row (headers):", rows[0])
-      console.log("- Second row (first data):", rows[1])
-      console.log("- Sample of first 3 rows:", rows.slice(0, 3))
+      console.log("- Headers:", rows[0])
+      console.log("- Sample row:", rows[1])
 
-      if (rows.length === 0) {
-        console.log("No data found in the sheet")
+      if (rows.length <= 1) {
+        console.log("No data rows found")
         return []
       }
 
-      if (rows.length === 1) {
-        console.log("Only header row found, no data rows")
-        return []
-      }
-
-      // Skip header row and map data
+      // Skip header row and process data
       const dataRows = rows.slice(1)
-      console.log("Processing", dataRows.length, "data rows")
 
       const processedData = dataRows
         .map((row: string[], index: number) => {
-          const requisition = {
+          // Map columns based on your Google Form structure
+          const requisition: RequisitionData = {
             id: (index + 1).toString(),
             timestamp: row[0] || "",
             email: row[1] || "",
@@ -128,18 +82,24 @@ export class GoogleSheetsIntegration {
             requisitionBreakdown: row[8] || "",
             estimatedStartDate: row[9] || "",
             expectedDeliveryDate: row[10] || "",
-            pocName: row[75] || "", // Adjust this index based on your actual data
-            status: row[82] || "pending", // Column CE (0-indexed, so 82)
+            pocName: row[11] || "", // Adjust based on your actual column
+            status: row[82] || "pending", // Column CE (82 in 0-indexed)
           }
 
-          // Log first few processed items for debugging
-          if (index < 3) {
-            console.log(`Processed row ${index + 1}:`, requisition)
+          // Log first few items for debugging
+          if (index < 2) {
+            console.log(`Processed row ${index + 1}:`, {
+              id: requisition.id,
+              productName: requisition.productName,
+              email: requisition.email,
+              status: requisition.status,
+              timestamp: requisition.timestamp,
+            })
           }
 
           return requisition
         })
-        .filter((req) => req.timestamp) // Filter out empty rows
+        .filter((req) => req.timestamp && req.email) // Filter out empty rows
 
       console.log("Final processed data count:", processedData.length)
       return processedData
@@ -156,7 +116,7 @@ export class GoogleSheetsIntegration {
         return false
       }
 
-      const range = `'Form Responses 1'!CE${rowIndex + 2}`
+      const range = `CE${rowIndex + 2}` // CE column, +2 for header and 1-indexed
       const response = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
         {
@@ -170,11 +130,6 @@ export class GoogleSheetsIntegration {
           }),
         },
       )
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Update error:", errorText)
-      }
 
       return response.ok
     } catch (error) {
