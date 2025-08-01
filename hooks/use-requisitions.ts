@@ -9,25 +9,32 @@ export function useRequisitions(accessToken: string | null) {
   const [error, setError] = useState<string | null>(null)
 
   const fetchRequisitions = async () => {
-    if (!accessToken) return
-
     try {
       setLoading(true)
+      setError(null)
+
       const response = await fetch("/api/requisitions", {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : {},
       })
 
       if (!response.ok) {
-        throw new Error("Failed to fetch requisitions")
+        const errorData = await response.json()
+        throw new Error(errorData.details || errorData.error || "Failed to fetch requisitions")
       }
 
       const data = await response.json()
       setRequisitions(data)
-      setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred")
+      const errorMessage = err instanceof Error ? err.message : "An error occurred"
+      setError(errorMessage)
+      console.error("Fetch error:", err)
+
+      // Set empty array as fallback
+      setRequisitions([])
     } finally {
       setLoading(false)
     }
@@ -39,7 +46,7 @@ export function useRequisitions(accessToken: string | null) {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
+          ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
         },
         body: JSON.stringify({ id, status }),
       })
@@ -47,6 +54,9 @@ export function useRequisitions(accessToken: string | null) {
       if (response.ok) {
         // Update local state
         setRequisitions((prev) => prev.map((req) => (req.id === id ? { ...req, status } : req)))
+      } else {
+        const errorData = await response.json()
+        console.error("Update error:", errorData)
       }
     } catch (err) {
       console.error("Error updating status:", err)
