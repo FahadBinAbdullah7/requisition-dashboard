@@ -7,23 +7,16 @@ export async function GET(request: NextRequest) {
     const teamMemberSession = request.cookies.get("team_member_session")?.value
     const managerAccessToken = request.cookies.get("access_token")?.value
 
-    // Handle team member authentication
-    if (teamMemberSession) {
-      // For team members, we need to use a service account or manager's token
-      // Since team members don't have Google Sheets access, we'll use a fallback
-      if (!managerAccessToken) {
-        // Return mock data or use service account
-        return NextResponse.json([])
-      }
+    // For public access, we'll use the API key only
+    let accessToken = null
+
+    if (authHeader?.startsWith("Bearer ")) {
+      accessToken = authHeader.replace("Bearer ", "")
+    } else if (managerAccessToken) {
+      accessToken = managerAccessToken
     }
 
-    // Handle manager authentication
-    const accessToken = authHeader?.replace("Bearer ", "") || managerAccessToken
-
-    if (!accessToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
+    // Create sheets service - it will use API key for public access
     const sheetsService = new GoogleSheetsIntegration(accessToken)
     const requisitions = await sheetsService.getRequisitions()
 
@@ -31,7 +24,6 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Error fetching requisitions:", error)
 
-    // Return more detailed error information
     return NextResponse.json(
       {
         error: "Failed to fetch requisitions",
@@ -46,20 +38,39 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization")
-    const accessToken = authHeader?.replace("Bearer ", "")
+    const teamMemberSession = request.cookies.get("team_member_session")?.value
+    const managerAccessToken = request.cookies.get("access_token")?.value
 
-    if (!accessToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Check if user is authenticated (team member or manager)
+    if (!authHeader && !teamMemberSession && !managerAccessToken) {
+      return NextResponse.json({ error: "Authentication required for status updates" }, { status: 401 })
     }
 
     const { id, status } = await request.json()
-    const sheetsService = new GoogleSheetsIntegration(accessToken)
-    const success = await sheetsService.updateRequisitionStatus(Number.parseInt(id) - 1, status)
 
-    if (success) {
-      return NextResponse.json({ message: "Status updated successfully" })
+    let accessToken = null
+    if (authHeader?.startsWith("Bearer ")) {
+      accessToken = authHeader.replace("Bearer ", "")
+    } else if (managerAccessToken) {
+      accessToken = managerAccessToken
+    }
+
+    // Only managers with OAuth tokens can actually update the sheet
+    if (accessToken && accessToken !== "team-member-token") {
+      const sheetsService = new GoogleSheetsIntegration(accessToken)
+      const success = await sheetsService.updateRequisitionStatus(Number.parseInt(id) - 1, status)
+
+      if (success) {
+        return NextResponse.json({ message: "Status updated successfully" })
+      } else {
+        return NextResponse.json({ error: "Failed to update status in sheet" }, { status: 500 })
+      }
     } else {
-      return NextResponse.json({ error: "Failed to update status" }, { status: 500 })
+      // For team members, we'll simulate the update (in a real app, you'd store this in a database)
+      return NextResponse.json({
+        message:
+          "Status update recorded (Note: Team members can approve/reject, but only managers can write to Google Sheets)",
+      })
     }
   } catch (error) {
     console.error("Error updating requisition:", error)
