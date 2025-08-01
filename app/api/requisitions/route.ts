@@ -37,9 +37,15 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    console.log("=== STATUS UPDATE REQUEST ===")
+
     const authHeader = request.headers.get("authorization")
     const teamMemberSession = request.cookies.get("team_member_session")?.value
     const managerAccessToken = request.cookies.get("access_token")?.value
+
+    console.log("Auth header present:", !!authHeader)
+    console.log("Team member session:", !!teamMemberSession)
+    console.log("Manager access token:", !!managerAccessToken)
 
     // Check if user is authenticated (team member or manager)
     if (!authHeader && !teamMemberSession && !managerAccessToken) {
@@ -47,33 +53,48 @@ export async function PUT(request: NextRequest) {
     }
 
     const { id, status } = await request.json()
+    console.log("Update request - ID:", id, "Status:", status)
 
     let accessToken = null
     if (authHeader?.startsWith("Bearer ")) {
       accessToken = authHeader.replace("Bearer ", "")
     } else if (managerAccessToken) {
       accessToken = managerAccessToken
+    } else if (teamMemberSession) {
+      accessToken = "team-member-token"
     }
 
-    // Only managers with OAuth tokens can actually update the sheet
-    if (accessToken && accessToken !== "team-member-token") {
-      const sheetsService = new GoogleSheetsIntegration(accessToken)
-      const success = await sheetsService.updateRequisitionStatus(Number.parseInt(id) - 1, status)
+    console.log("Using access token type:", accessToken === "team-member-token" ? "team-member" : "manager")
 
-      if (success) {
-        return NextResponse.json({ message: "Status updated successfully" })
-      } else {
-        return NextResponse.json({ error: "Failed to update status in sheet" }, { status: 500 })
-      }
-    } else {
-      // For team members, we'll simulate the update (in a real app, you'd store this in a database)
+    const sheetsService = new GoogleSheetsIntegration(accessToken)
+    const success = await sheetsService.updateRequisitionStatus(Number.parseInt(id) - 1, status)
+
+    if (success) {
+      console.log("Status update successful")
       return NextResponse.json({
-        message:
-          "Status update recorded (Note: Team members can approve/reject, but only managers can write to Google Sheets)",
+        message: "Status updated successfully",
+        updated: true,
+        id,
+        status,
       })
+    } else {
+      console.log("Status update failed")
+      return NextResponse.json(
+        {
+          error: "Failed to update status in sheet",
+          updated: false,
+        },
+        { status: 500 },
+      )
     }
   } catch (error) {
     console.error("Error updating requisition:", error)
-    return NextResponse.json({ error: "Failed to update requisition" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to update requisition",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
