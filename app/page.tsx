@@ -179,20 +179,21 @@ export default function RequisitionDashboard() {
     }
   }
 
-  const closeModal = (reqId: string) => {
-    const modalElement = document.getElementById(`modal-${reqId}`)
-    const backdrop = document.getElementById(`backdrop-${reqId}`)
+ const closeModal = (reqId: string) => {
+  const modalElement = document.getElementById(`modal-${reqId}`)
+  const backdrop = document.getElementById(`backdrop-${reqId}`)
 
-    if (modalElement) {
-      modalElement.style.display = "none"
-      modalElement.classList.remove("show")
-      document.body.classList.remove("modal-open")
-
-      if (backdrop) {
-        backdrop.remove()
-      }
-    }
+  if (modalElement) {
+    modalElement.style.display = "none"
+    modalElement.classList.remove("show")
   }
+
+  // Always remove modal-open from body
+  document.body.classList.remove("modal-open")
+
+  // Remove all backdrops (in case of multiple modals)
+  document.querySelectorAll('.modal-backdrop').forEach(el => el.remove())
+}
 
   // Show login component if explicitly requested
   if (showLogin) {
@@ -637,7 +638,7 @@ export default function RequisitionDashboard() {
                                           onClick={() => closeModal(req.id)}
                                         ></button>
                                       </div>
-                                      <div className="modal-body">
+                                      <<div className="modal-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>
                                         <div className="row g-4">
                                           {/* Basic Information */}
                                           <div className="col-12">
