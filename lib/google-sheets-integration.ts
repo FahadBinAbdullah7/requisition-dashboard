@@ -14,32 +14,41 @@ export interface RequisitionData {
   expectedDeliveryDate: string
   pocName: string
   status: string
-  // Add more fields as needed from your complex form
 }
 
 export class GoogleSheetsIntegration {
-  private accessToken: string
+  private accessToken: string | null
+  private apiKey: string | null
   private spreadsheetId: string
 
-  constructor(accessToken: string) {
-    this.accessToken = accessToken
+  constructor(accessToken?: string) {
+    this.accessToken = accessToken || null
+    this.apiKey = process.env.GOOGLE_SHEETS_API_KEY || null
     this.spreadsheetId = "1sxvfRTotejH8teKTOB27Eqqr00YR6LEsr6PBj58Iuns"
   }
 
   async getRequisitions(): Promise<RequisitionData[]> {
     try {
-      const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/Sheet1!A:AZ`,
-        {
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-            "Content-Type": "application/json",
-          },
-        },
-      )
+      let url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/Sheet1!A:CE`
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+
+      // Use OAuth token if available (for managers), otherwise use API key
+      if (this.accessToken && this.accessToken !== "team-member-token") {
+        headers.Authorization = `Bearer ${this.accessToken}`
+      } else if (this.apiKey) {
+        url += `?key=${this.apiKey}`
+      } else {
+        throw new Error("No authentication method available")
+      }
+
+      const response = await fetch(url, { headers })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch data: ${response.statusText}`)
+        const errorText = await response.text()
+        console.error("Google Sheets API Error:", errorText)
+        throw new Error(`Failed to fetch data: ${response.status} ${response.statusText}`)
       }
 
       const data = await response.json()
@@ -55,19 +64,19 @@ export class GoogleSheetsIntegration {
       return dataRows
         .map((row: string[], index: number) => ({
           id: (index + 1).toString(),
-          timestamp: row[0] || "", // Timestamp
-          email: row[1] || "", // Email Address
-          productName: row[2] || "", // Product/Course/Requisition Name
-          type: row[3] || "", // Type of the Product/Course/Requisition
-          deliveryTimeline: row[4] || "", // Delivery Requirement Timeline
-          assignedTeam: row[5] || "", // Select a Team or a Combination of Teams
-          pocEmail: row[6] || "", // Email of the POC
-          details: row[7] || "", // Details of the Product/Course/Requisition
-          requisitionBreakdown: row[8] || "", // Requisition Breakdown (Google Sheet/Docs Link)
-          estimatedStartDate: row[9] || "", // Estimated Start Date
-          expectedDeliveryDate: row[10] || "", // Expected Delivery Date
-          pocName: row[75] || "", // Name of the POC (based on your headers)
-          status: row[82] || "pending", // CE column (0-indexed, so 82)
+          timestamp: row[0] || "", // Column A: Timestamp
+          email: row[1] || "", // Column B: Email Address
+          productName: row[2] || "", // Column C: Product/Course/Requisition Name
+          type: row[3] || "", // Column D: Type of the Product/Course/Requisition
+          deliveryTimeline: row[4] || "", // Column E: Delivery Requirement Timeline
+          assignedTeam: row[5] || "", // Column F: Select a Team or a Combination of Teams
+          pocEmail: row[6] || "", // Column G: Email of the POC
+          details: row[7] || "", // Column H: Details of the Product/Course/Requisition
+          requisitionBreakdown: row[8] || "", // Column I: Requisition Breakdown (Google Sheet/Docs Link)
+          estimatedStartDate: row[9] || "", // Column J: Estimated Start Date
+          expectedDeliveryDate: row[10] || "", // Column K: Expected Delivery Date
+          pocName: row[75] || "", // Column BX: Name of the POC (adjust based on your actual column)
+          status: row[82] || "pending", // Column CE: Status (0-indexed, so 82)
         }))
         .filter((req) => req.timestamp) // Filter out empty rows
     } catch (error) {
@@ -78,6 +87,11 @@ export class GoogleSheetsIntegration {
 
   async updateRequisitionStatus(rowIndex: number, status: string): Promise<boolean> {
     try {
+      if (!this.accessToken || this.accessToken === "team-member-token") {
+        console.error("Cannot update status: OAuth token required for write operations")
+        return false
+      }
+
       // Update status in column CE (column 83)
       const response = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/Sheet1!CE${rowIndex + 2}?valueInputOption=RAW`,
@@ -93,6 +107,11 @@ export class GoogleSheetsIntegration {
         },
       )
 
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("Update error:", errorText)
+      }
+
       return response.ok
     } catch (error) {
       console.error("Error updating status:", error)
@@ -102,6 +121,11 @@ export class GoogleSheetsIntegration {
 
   async addStatusColumn(): Promise<boolean> {
     try {
+      if (!this.accessToken || this.accessToken === "team-member-token") {
+        console.error("Cannot add column: OAuth token required for write operations")
+        return false
+      }
+
       // Add "Status" header to column CE
       const response = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/Sheet1!CE1?valueInputOption=RAW`,
