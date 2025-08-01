@@ -5,9 +5,35 @@ import { useRequisitions } from "@/hooks/use-requisitions"
 import { TeamMemberLogin } from "@/components/team-member-login"
 import { TeamManagement } from "@/components/team-management"
 
+// Define interfaces for type safety
+interface Requisition {
+  id: string
+  productName?: string
+  type?: string
+  email?: string
+  assignedTeam?: string
+  status?: string
+  timestamp?: string
+  pocName?: string
+  pocEmail?: string
+  details?: string
+  deliveryTimeline?: string
+  estimatedStartDate?: string
+  expectedDeliveryDate?: string
+  requisitionBreakdown?: string
+}
+
+interface User {
+  name?: string
+  email?: string
+  role?: string
+  team?: string
+  accessToken?: string
+}
+
 export default function RequisitionDashboard() {
   const [accessToken, setAccessToken] = useState<string | null>(null)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [statusFilter, setStatusFilter] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
@@ -26,6 +52,7 @@ export default function RequisitionDashboard() {
         const response = await fetch("/api/auth/me", {
           credentials: "include",
         })
+
         if (response.ok) {
           const userData = await response.json()
           setUser(userData.user)
@@ -50,7 +77,7 @@ export default function RequisitionDashboard() {
 
   // Filter requisitions
   const filteredRequisitions = useMemo(() => {
-    let filtered = requisitions
+    let filtered: Requisition[] = requisitions
 
     if (statusFilter !== "all") {
       filtered = filtered.filter((req) => req.status?.toLowerCase() === statusFilter)
@@ -62,7 +89,7 @@ export default function RequisitionDashboard() {
 
     if (dateFrom || dateTo) {
       filtered = filtered.filter((req) => {
-        const reqDate = new Date(req.timestamp)
+        const reqDate = new Date(req.timestamp || "")
         const fromDate = dateFrom ? new Date(dateFrom) : new Date("1900-01-01")
         const toDate = dateTo ? new Date(dateTo) : new Date("2100-12-31")
         return reqDate >= fromDate && reqDate <= toDate
@@ -84,6 +111,7 @@ export default function RequisitionDashboard() {
       completed: { class: "badge-completed", icon: "bi-check-circle-fill", label: "Completed" },
       rejected: { class: "badge-rejected", icon: "bi-x-circle", label: "Rejected" },
     }
+
     const config = statusConfig[statusLower as keyof typeof statusConfig] || statusConfig.pending
     return (
       <span className={`badge ${config.class}`}>
@@ -104,9 +132,9 @@ export default function RequisitionDashboard() {
   }
 
   const stats = getStats()
-  const uniqueTeams = [...new Set(requisitions.map((req) => req.assignedTeam).filter(Boolean))]
+  const uniqueTeams = [...new Set(requisitions.map((req: Requisition) => req.assignedTeam).filter(Boolean))]
 
-  const handleLogin = (userData: any) => {
+  const handleLogin = (userData: User) => {
     setUser(userData)
     if (userData.role === "manager") {
       setAccessToken(userData.accessToken)
@@ -160,17 +188,14 @@ export default function RequisitionDashboard() {
   const openModal = (reqId: string) => {
     const modalElement = document.getElementById(`modal-${reqId}`)
     if (modalElement) {
-      // Create modal instance if Bootstrap is loaded
-      if (typeof window !== "undefined" && (window as any).bootstrap) {
+      if (typeof window !== "undefined" && (window as any).bootstrap?.Modal) {
         const modal = new (window as any).bootstrap.Modal(modalElement)
         modal.show()
       } else {
-        // Fallback: show modal manually
+        console.warn("Bootstrap Modal not available, falling back to manual display")
         modalElement.style.display = "block"
         modalElement.classList.add("show")
         document.body.classList.add("modal-open")
-
-        // Add backdrop
         const backdrop = document.createElement("div")
         backdrop.className = "modal-backdrop fade show"
         backdrop.id = `backdrop-${reqId}`
@@ -179,27 +204,23 @@ export default function RequisitionDashboard() {
     }
   }
 
- const closeModal = (reqId: string) => {
-  const modalElement = document.getElementById(`modal-${reqId}`)
-
-  if (modalElement) {
-    modalElement.style.display = "none"
-    modalElement.classList.remove("show")
+  const closeModal = (reqId: string) => {
+    const modalElement = document.getElementById(`modal-${reqId}`)
+    if (modalElement) {
+      modalElement.style.display = "none"
+      modalElement.classList.remove("show")
+    }
+    document.body.classList.remove("modal-open")
+    const backdrop = document.getElementById(`backdrop-${reqId}`)
+    if (backdrop) {
+      backdrop.remove()
+    }
   }
 
-  // Always remove modal-open from body
-  document.body.classList.remove("modal-open")
-
-  // Remove all backdrops (in case of multiple modals)
-  document.querySelectorAll('.modal-backdrop').forEach(el => el.remove())
-}
-
-  // Show login component if explicitly requested
   if (showLogin) {
     return <TeamMemberLogin onLogin={handleLogin} />
   }
 
-  // Show loading only if auth hasn't been checked yet
   if (!authChecked || (loading && !requisitions.length)) {
     return (
       <div className="min-vh-100 d-flex align-items-center justify-content-center">
@@ -267,7 +288,6 @@ export default function RequisitionDashboard() {
             <i className="bi bi-file-text me-2" style={{ fontSize: "1.5rem" }}></i>
             Requisition Management System
           </a>
-
           <div className="d-flex align-items-center">
             {viewMode === "public" ? (
               <div className="d-flex align-items-center">
@@ -283,9 +303,9 @@ export default function RequisitionDashboard() {
             ) : (
               <div className="d-flex align-items-center">
                 <div className="me-3 text-end">
-                  <div className="fw-bold">{user?.name}</div>
+                  <div className="fw-bold">{user?.name || "Unknown User"}</div>
                   <small className="text-muted text-capitalize">
-                    {user?.role?.replace("_", " ")} {user?.team && `• ${user.team}`}
+                    {user?.role?.replace("_", " ") || "Unknown Role"} {user?.team && `• ${user.team}`}
                   </small>
                 </div>
                 <div className="dropdown">
@@ -572,7 +592,7 @@ export default function RequisitionDashboard() {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredRequisitions.slice(0, 20).map((req) => (
+                          {filteredRequisitions.slice(0, 20).map((req: Requisition) => (
                             <tr key={req.id}>
                               <td>
                                 <strong>{req.productName || "Untitled"}</strong>
@@ -584,7 +604,7 @@ export default function RequisitionDashboard() {
                               <td>
                                 <span className="badge bg-info">{req.assignedTeam}</span>
                               </td>
-                              <td>{getStatusBadge(req.status)}</td>
+                              <td>{getStatusBadge(req.status || "")}</td>
                               <td>{req.timestamp ? new Date(req.timestamp).toLocaleDateString() : "Unknown"}</td>
                               {(user?.role === "team_member" || user?.role === "manager") && (
                                 <td>
@@ -621,7 +641,6 @@ export default function RequisitionDashboard() {
                                   <i className="bi bi-eye me-1"></i>
                                   View
                                 </button>
-
                                 {/* Enhanced Modal for each requisition */}
                                 <div className="modal fade" id={`modal-${req.id}`} tabIndex={-1} aria-hidden="true">
                                   <div className="modal-dialog modal-xl">
@@ -637,7 +656,7 @@ export default function RequisitionDashboard() {
                                           onClick={() => closeModal(req.id)}
                                         ></button>
                                       </div>
-                                      <<div className="modal-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+                                      <div className="modal-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>
                                         <div className="row g-4">
                                           {/* Basic Information */}
                                           <div className="col-12">
@@ -672,7 +691,7 @@ export default function RequisitionDashboard() {
                                                       Current Status
                                                     </label>
                                                     <div className="p-2 bg-light rounded">
-                                                      {getStatusBadge(req.status)}
+                                                      {getStatusBadge(req.status || "")}
                                                     </div>
                                                   </div>
                                                   <div className="col-md-6 mb-3">
@@ -689,7 +708,6 @@ export default function RequisitionDashboard() {
                                               </div>
                                             </div>
                                           </div>
-
                                           {/* Contact Information */}
                                           <div className="col-12">
                                             <div className="card">
@@ -727,7 +745,6 @@ export default function RequisitionDashboard() {
                                               </div>
                                             </div>
                                           </div>
-
                                           {/* Project Details */}
                                           <div className="col-12">
                                             <div className="card">
@@ -780,7 +797,6 @@ export default function RequisitionDashboard() {
                                               </div>
                                             </div>
                                           </div>
-
                                           {/* Additional Information */}
                                           <div className="col-12">
                                             <div className="card">
@@ -901,5 +917,3 @@ export default function RequisitionDashboard() {
     </div>
   )
 }
-
-              
