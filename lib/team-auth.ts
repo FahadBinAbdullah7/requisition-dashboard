@@ -20,7 +20,7 @@ export interface Manager {
 
 // In production, replace this with a proper database
 // For now, we'll use environment variables and a JSON structure
-export class TeamAuthService {
+export default class TeamAuthService {
   private teamMembers: TeamMember[] = []
   private managers: Manager[] = []
 
