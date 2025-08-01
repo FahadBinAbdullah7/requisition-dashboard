@@ -39,18 +39,21 @@ export async function GET(request: NextRequest) {
 
     const user = await userResponse.json()
 
-    // Set cookies or session
-    const response = NextResponse.redirect(new URL("/", request.url))
+    // Set cookies and redirect to dashboard
+    const response = NextResponse.redirect(new URL("/dashboard", request.url))
+
     response.cookies.set("access_token", tokens.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       maxAge: tokens.expires_in,
+      sameSite: "lax",
     })
 
     response.cookies.set("user_email", user.email, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       maxAge: tokens.expires_in,
+      sameSite: "lax",
     })
 
     return response
