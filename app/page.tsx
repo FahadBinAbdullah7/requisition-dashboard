@@ -1,45 +1,6 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  CheckCircle,
-  Clock,
-  XCircle,
-  FileText,
-  LogOut,
-  Filter,
-  TrendingUp,
-  AlertCircle,
-  LogIn,
-  Eye,
-  UserCheck,
-  BarChart3,
-  Users,
-  Calendar,
-  Search,
-  Activity,
-  Zap,
-  Target,
-  Award,
-  RefreshCw,
-} from "lucide-react"
 import { useRequisitions } from "@/hooks/use-requisitions"
 import { TeamMemberLogin } from "@/components/team-member-login"
 import { TeamManagement } from "@/components/team-management"
@@ -53,6 +14,7 @@ export default function RequisitionDashboard() {
   const [teamFilter, setTeamFilter] = useState("all")
   const [showLogin, setShowLogin] = useState(false)
   const [viewMode, setViewMode] = useState<"public" | "authenticated">("public")
+  const [activeTab, setActiveTab] = useState("dashboard")
 
   const { requisitions, loading, error, updateStatus, refetch } = useRequisitions(accessToken)
 
@@ -105,41 +67,22 @@ export default function RequisitionDashboard() {
 
   const getStatusBadge = (status: string) => {
     const statusLower = status?.toLowerCase() || "pending"
-
     const statusConfig = {
-      pending: {
-        className: "status-pending",
-        icon: <Clock className="w-3 h-3 mr-1.5" />,
-        label: "Pending",
-      },
-      approved: {
-        className: "status-approved",
-        icon: <CheckCircle className="w-3 h-3 mr-1.5" />,
-        label: "Approved",
-      },
-      completed: {
-        className: "status-completed",
-        icon: <CheckCircle className="w-3 h-3 mr-1.5" />,
-        label: "Completed",
-      },
-      rejected: {
-        className: "status-rejected",
-        icon: <XCircle className="w-3 h-3 mr-1.5" />,
-        label: "Rejected",
-      },
+      pending: { class: "badge-pending", icon: "bi-clock", label: "Pending" },
+      approved: { class: "badge-approved", icon: "bi-check-circle", label: "Approved" },
+      completed: { class: "badge-completed", icon: "bi-check-circle-fill", label: "Completed" },
+      rejected: { class: "badge-rejected", icon: "bi-x-circle", label: "Rejected" },
     }
-
     const config = statusConfig[statusLower as keyof typeof statusConfig] || statusConfig.pending
-
     return (
-      <Badge className={`${config.className} font-semibold px-3 py-1.5 text-xs rounded-full border-0`}>
-        {config.icon}
+      <span className={`badge ${config.class}`}>
+        <i className={`${config.icon} me-1`}></i>
         {config.label}
-      </Badge>
+      </span>
     )
   }
 
-  const getStatsForDateRange = () => {
+  const getStats = () => {
     return {
       total: filteredRequisitions.length,
       pending: filteredRequisitions.filter((r) => r.status?.toLowerCase() === "pending").length,
@@ -149,7 +92,7 @@ export default function RequisitionDashboard() {
     }
   }
 
-  const stats = getStatsForDateRange()
+  const stats = getStats()
   const uniqueTeams = [...new Set(requisitions.map((req) => req.assignedTeam).filter(Boolean))]
 
   const handleLogin = (userData: any) => {
@@ -169,15 +112,13 @@ export default function RequisitionDashboard() {
     setUser(null)
     setAccessToken("public")
     setViewMode("public")
+    setActiveTab("dashboard")
     refetch()
   }
 
   const handleStatusUpdate = async (id: string, newStatus: string) => {
     await updateStatus(id, newStatus)
-    // Force a refetch to ensure public view sees the update
-    setTimeout(() => {
-      refetch()
-    }, 1000)
+    setTimeout(() => refetch(), 1000)
   }
 
   if (showLogin) {
@@ -186,716 +127,566 @@ export default function RequisitionDashboard() {
 
   if (loading) {
     return (
-      <div className="dashboard-container flex items-center justify-center p-8">
-        <Card className="glass-card w-full max-w-md border-0 rounded-3xl animate-bounce-in">
-          <CardContent className="flex flex-col items-center justify-center p-12">
-            <div className="loading-spinner mb-8"></div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-3">Loading Dashboard</h3>
-            <p className="text-gray-600 text-center leading-relaxed">
-              Connecting to Google Sheets and fetching your requisitions...
-            </p>
-          </CardContent>
-        </Card>
+      <div className="min-vh-100 d-flex align-items-center justify-content-center">
+        <div className="loading-container">
+          <div className="loading-spinner mb-4"></div>
+          <h3 className="text-center mb-3">Loading Dashboard</h3>
+          <p className="text-center text-muted">Connecting to Google Sheets...</p>
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="dashboard-container flex items-center justify-center p-8">
-        <Card className="glass-card w-full max-w-lg border-0 rounded-3xl animate-scale-in">
-          <CardHeader className="text-center pb-6">
-            <div className="mx-auto w-20 h-20 bg-gradient-to-r from-red-500 to-rose-500 rounded-full flex items-center justify-center mb-6 shadow-lg">
-              <AlertCircle className="w-10 h-10 text-white" />
-            </div>
-            <CardTitle className="text-2xl font-bold text-red-600">Connection Error</CardTitle>
-            <CardDescription className="text-gray-600 text-lg">Unable to connect to Google Sheets</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 mb-8">
-              <p className="text-red-800 font-medium">{error}</p>
-            </div>
-            <div className="space-y-4">
-              <Button
-                className="w-full btn-primary h-12 rounded-2xl font-semibold"
-                onClick={() => window.location.reload()}
-              >
-                <RefreshCw className="w-5 h-5 mr-2" />
-                Retry Connection
-              </Button>
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  variant="outline"
-                  className="glass-card border-2 h-12 rounded-2xl font-medium bg-transparent"
-                  onClick={() => window.open("/api/test-connection", "_blank")}
-                >
-                  Test API
-                </Button>
-                <Button
-                  variant="outline"
-                  className="glass-card border-2 h-12 rounded-2xl font-medium bg-transparent"
-                  onClick={() => window.open("/api/debug-columns", "_blank")}
-                >
-                  Debug Sheet
-                </Button>
+      <div className="min-vh-100 d-flex align-items-center justify-content-center">
+        <div className="container">
+          <div className="row justify-content-center">
+            <div className="col-md-6">
+              <div className="card text-center">
+                <div className="card-body p-5">
+                  <div className="mb-4">
+                    <i className="bi bi-exclamation-triangle text-danger" style={{ fontSize: "4rem" }}></i>
+                  </div>
+                  <h2 className="text-danger mb-3">Connection Error</h2>
+                  <p className="text-muted mb-4">{error}</p>
+                  <div className="d-grid gap-2">
+                    <button className="btn btn-primary" onClick={() => window.location.reload()}>
+                      <i className="bi bi-arrow-clockwise me-2"></i>
+                      Retry Connection
+                    </button>
+                    <div className="row">
+                      <div className="col-6">
+                        <button
+                          className="btn btn-outline-secondary w-100"
+                          onClick={() => window.open("/api/test-connection", "_blank")}
+                        >
+                          Test API
+                        </button>
+                      </div>
+                      <div className="col-6">
+                        <button
+                          className="btn btn-outline-secondary w-100"
+                          onClick={() => window.open("/api/debug-columns", "_blank")}
+                        >
+                          Debug
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="dashboard-container min-h-screen">
-      {/* Professional Header */}
-      <header className="professional-header sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center animate-fade-in">
-              <div className="w-14 h-14 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 rounded-2xl flex items-center justify-center mr-4 shadow-xl">
-                <FileText className="h-7 w-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent">
-                  Requisition Dashboard
-                </h1>
-                <p className="text-gray-600 font-medium mt-1">
-                  {viewMode === "public" ? "🌐 Public View - All Requisitions" : "🔐 Authenticated Dashboard"}
-                </p>
-              </div>
-            </div>
+    <div className="min-vh-100">
+      {/* Navigation */}
+      <nav className="navbar navbar-expand-lg navbar-light sticky-top">
+        <div className="container">
+          <a className="navbar-brand d-flex align-items-center" href="#">
+            <i className="bi bi-file-text me-2" style={{ fontSize: "1.5rem" }}></i>
+            Requisition Management System
+          </a>
 
-            <div className="flex items-center space-x-4 animate-fade-in">
-              {viewMode === "public" ? (
-                <div className="flex items-center space-x-4">
-                  <Button
-                    onClick={() => setShowLogin(true)}
-                    className="btn-primary h-12 px-6 rounded-2xl font-semibold"
-                  >
-                    <LogIn className="h-5 w-5 mr-2" />
-                    Team Login
-                  </Button>
-                  <Badge className="bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border-green-200 px-4 py-2 rounded-full font-semibold">
-                    <Eye className="h-4 w-4 mr-2" />
-                    Public Access
-                  </Badge>
+          <div className="d-flex align-items-center">
+            {viewMode === "public" ? (
+              <div className="d-flex align-items-center">
+                <span className="badge bg-success me-3">
+                  <i className="bi bi-globe me-1"></i>
+                  Public View
+                </span>
+                <button className="btn btn-primary" onClick={() => setShowLogin(true)}>
+                  <i className="bi bi-box-arrow-in-right me-2"></i>
+                  Team Login
+                </button>
+              </div>
+            ) : (
+              <div className="d-flex align-items-center">
+                <div className="me-3 text-end">
+                  <div className="fw-bold">{user?.name}</div>
+                  <small className="text-muted text-capitalize">
+                    {user?.role?.replace("_", " ")} {user?.team && `• ${user.team}`}
+                  </small>
                 </div>
-              ) : (
-                <div className="flex items-center space-x-4">
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-gray-900">{user?.name}</p>
-                    <p className="text-sm text-gray-600 capitalize font-medium">
-                      {user?.role?.replace("_", " ")} • {user?.team || "All Teams"}
+                <div className="dropdown">
+                  <button className="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i className="bi bi-person-circle me-1"></i>
+                  </button>
+                  <ul className="dropdown-menu dropdown-menu-end">
+                    <li>
+                      <button className="dropdown-item" onClick={handleLogout}>
+                        <i className="bi bi-box-arrow-right me-2"></i>
+                        Logout
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      <div className="container my-4">
+        {/* Page Header */}
+        <div className="row mb-4">
+          <div className="col">
+            <div className="card">
+              <div className="card-body">
+                <div className="row align-items-center">
+                  <div className="col">
+                    <h1 className="text-gradient mb-2">
+                      {viewMode === "public"
+                        ? "Public Dashboard"
+                        : user?.role === "manager"
+                          ? "Manager Dashboard"
+                          : user?.role === "team_member"
+                            ? "Team Member Dashboard"
+                            : "Dashboard"}
+                    </h1>
+                    <p className="text-muted mb-0">
+                      {viewMode === "public"
+                        ? "View all requisition requests and their current status"
+                        : user?.role === "manager"
+                          ? "Manage requisitions, teams, and system settings"
+                          : user?.role === "team_member"
+                            ? `Review and approve requisitions for ${user?.team || "your team"}`
+                            : "Manage your requisition requests"}
                     </p>
                   </div>
-                  <Avatar className="h-14 w-14 ring-4 ring-blue-100 shadow-lg">
-                    <AvatarImage src={user?.picture || "/placeholder.svg"} />
-                    <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold text-lg">
-                      {user?.name
-                        ?.split(" ")
-                        .map((n: string) => n[0])
-                        .join("") || "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleLogout}
-                    className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl h-10 w-10"
-                  >
-                    <LogOut className="h-5 w-5" />
-                  </Button>
+                  <div className="col-auto">
+                    <button className="btn btn-outline-primary" onClick={refetch}>
+                      <i className="bi bi-arrow-clockwise me-2"></i>
+                      Refresh Data
+                    </button>
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
-      </header>
 
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 py-8 relative z-10">
-        {/* Filters Section */}
-        <Card className="filters-section mb-8 border-0 animate-slide-up">
-          <CardHeader>
-            <CardTitle className="flex items-center text-xl font-bold text-gray-800">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl flex items-center justify-center mr-3 shadow-lg">
-                <Filter className="h-5 w-5 text-white" />
+        {/* Stats Cards */}
+        <div className="row mb-4">
+          <div className="col-md-2 col-sm-6 mb-3">
+            <div className="stats-card">
+              <div className="stats-icon bg-gradient-primary">
+                <i className="bi bi-file-text"></i>
               </div>
-              Smart Filters & Search
-            </CardTitle>
-            <CardDescription className="text-gray-600 font-medium">
-              Filter and search through requisitions with advanced options
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-              <div className="space-y-3">
-                <Label htmlFor="dateFrom" className="text-sm font-bold text-gray-700 flex items-center">
-                  <Calendar className="w-4 h-4 mr-2 text-blue-600" />
-                  From Date
-                </Label>
-                <Input
-                  id="dateFrom"
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="professional-input h-12 font-medium"
-                />
-              </div>
-              <div className="space-y-3">
-                <Label htmlFor="dateTo" className="text-sm font-bold text-gray-700 flex items-center">
-                  <Calendar className="w-4 h-4 mr-2 text-blue-600" />
-                  To Date
-                </Label>
-                <Input
-                  id="dateTo"
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="professional-input h-12 font-medium"
-                />
-              </div>
-              <div className="space-y-3">
-                <Label className="text-sm font-bold text-gray-700 flex items-center">
-                  <BarChart3 className="w-4 h-4 mr-2 text-blue-600" />
-                  Status Filter
-                </Label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="professional-input h-12 font-medium">
-                    <SelectValue placeholder="All Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-3">
-                <Label className="text-sm font-bold text-gray-700 flex items-center">
-                  <Users className="w-4 h-4 mr-2 text-blue-600" />
-                  Team Filter
-                </Label>
-                <Select value={teamFilter} onValueChange={setTeamFilter}>
-                  <SelectTrigger className="professional-input h-12 font-medium">
-                    <SelectValue placeholder="All Teams" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Teams</SelectItem>
-                    {uniqueTeams.map((team) => (
-                      <SelectItem key={team} value={team}>
-                        {team}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-end">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setDateFrom("")
-                    setDateTo("")
-                    setStatusFilter("all")
-                    setTeamFilter("all")
-                  }}
-                  className="w-full glass-card border-2 h-12 rounded-2xl font-semibold hover:bg-white/90"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Clear All
-                </Button>
-              </div>
+              <h6 className="text-muted text-uppercase">Total Requests</h6>
+              <div className="stats-number">{stats.total}</div>
+              <small className="text-muted">All time</small>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="col-md-2 col-sm-6 mb-3">
+            <div className="stats-card">
+              <div className="stats-icon bg-gradient-warning">
+                <i className="bi bi-clock"></i>
+              </div>
+              <h6 className="text-muted text-uppercase">Pending</h6>
+              <div className="stats-number">{stats.pending}</div>
+              <small className="text-muted">
+                {stats.total > 0 ? Math.round((stats.pending / stats.total) * 100) : 0}% of total
+              </small>
+            </div>
+          </div>
+          <div className="col-md-2 col-sm-6 mb-3">
+            <div className="stats-card">
+              <div className="stats-icon" style={{ background: "linear-gradient(135deg, #3b82f6, #1d4ed8)" }}>
+                <i className="bi bi-check-circle"></i>
+              </div>
+              <h6 className="text-muted text-uppercase">Approved</h6>
+              <div className="stats-number">{stats.approved}</div>
+              <small className="text-muted">
+                {stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}% of total
+              </small>
+            </div>
+          </div>
+          <div className="col-md-2 col-sm-6 mb-3">
+            <div className="stats-card">
+              <div className="stats-icon bg-gradient-success">
+                <i className="bi bi-check-circle-fill"></i>
+              </div>
+              <h6 className="text-muted text-uppercase">Completed</h6>
+              <div className="stats-number">{stats.completed}</div>
+              <small className="text-muted">
+                {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}% of total
+              </small>
+            </div>
+          </div>
+          <div className="col-md-2 col-sm-6 mb-3">
+            <div className="stats-card">
+              <div className="stats-icon bg-gradient-danger">
+                <i className="bi bi-x-circle"></i>
+              </div>
+              <h6 className="text-muted text-uppercase">Rejected</h6>
+              <div className="stats-number">{stats.rejected}</div>
+              <small className="text-muted">
+                {stats.total > 0 ? Math.round((stats.rejected / stats.total) * 100) : 0}% of total
+              </small>
+            </div>
+          </div>
+        </div>
 
-        <Tabs defaultValue="dashboard" className="space-y-8">
-          {viewMode === "authenticated" && user?.role === "manager" ? (
-            <TabsList className="professional-tabs grid w-full grid-cols-3">
-              <TabsTrigger value="dashboard" className="professional-tab h-12 font-semibold">
-                <Activity className="w-5 h-5 mr-2" />
-                Dashboard
-              </TabsTrigger>
-              <TabsTrigger value="requisitions" className="professional-tab h-12 font-semibold">
-                <FileText className="w-5 h-5 mr-2" />
-                All Requisitions
-              </TabsTrigger>
-              <TabsTrigger value="teams" className="professional-tab h-12 font-semibold">
-                <Users className="w-5 h-5 mr-2" />
-                Team Management
-              </TabsTrigger>
-            </TabsList>
-          ) : (
-            <TabsList className="professional-tabs grid w-full grid-cols-2">
-              <TabsTrigger value="dashboard" className="professional-tab h-12 font-semibold">
-                <Activity className="w-5 h-5 mr-2" />
-                Overview
-              </TabsTrigger>
-              <TabsTrigger value="requisitions" className="professional-tab h-12 font-semibold">
-                <FileText className="w-5 h-5 mr-2" />
-                {viewMode === "public"
-                  ? "All Requisitions"
-                  : user?.role === "submitter"
-                    ? "My Requisitions"
-                    : "All Requisitions"}
-              </TabsTrigger>
-            </TabsList>
-          )}
-
-          {/* Dashboard Tab */}
-          <TabsContent value="dashboard" className="space-y-8">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-              {[
-                {
-                  title: "Total Requests",
-                  value: stats.total,
-                  icon: Target,
-                  gradient: "from-blue-500 to-indigo-600",
-                  description: dateFrom || dateTo ? "In selected range" : "All time",
-                  change: "+12%",
-                },
-                {
-                  title: "Pending Review",
-                  value: stats.pending,
-                  icon: Clock,
-                  gradient: "from-amber-500 to-orange-500",
-                  description: `${stats.total > 0 ? Math.round((stats.pending / stats.total) * 100) : 0}% of total`,
-                  change: "-5%",
-                },
-                {
-                  title: "Approved",
-                  value: stats.approved,
-                  icon: CheckCircle,
-                  gradient: "from-blue-500 to-cyan-500",
-                  description: `${stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}% of total`,
-                  change: "+8%",
-                },
-                {
-                  title: "Completed",
-                  value: stats.completed,
-                  icon: Award,
-                  gradient: "from-emerald-500 to-green-600",
-                  description: `${stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}% of total`,
-                  change: "+15%",
-                },
-                {
-                  title: "Rejected",
-                  value: stats.rejected,
-                  icon: XCircle,
-                  gradient: "from-red-500 to-rose-600",
-                  description: `${stats.total > 0 ? Math.round((stats.rejected / stats.total) * 100) : 0}% of total`,
-                  change: "-3%",
-                },
-              ].map((stat, index) => (
-                <Card
-                  key={stat.title}
-                  className="stats-card border-0 rounded-3xl animate-fade-in"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                    <CardTitle className="text-sm font-bold text-gray-600 uppercase tracking-wide">
-                      {stat.title}
-                    </CardTitle>
-                    <div
-                      className={`w-12 h-12 bg-gradient-to-r ${stat.gradient} rounded-2xl flex items-center justify-center shadow-lg`}
+        {/* Filters */}
+        <div className="row mb-4">
+          <div className="col">
+            <div className="card">
+              <div className="card-header">
+                <h5 className="mb-0">
+                  <i className="bi bi-funnel me-2"></i>
+                  Filters & Search
+                </h5>
+              </div>
+              <div className="card-body">
+                <div className="row">
+                  <div className="col-md-2 mb-3">
+                    <label className="form-label">From Date</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-2 mb-3">
+                    <label className="form-label">To Date</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-2 mb-3">
+                    <label className="form-label">Status</label>
+                    <select
+                      className="form-select"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
                     >
-                      <stat.icon className="h-6 w-6 text-white" />
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-4xl font-bold text-gray-900 mb-2">{stat.value}</div>
-                    <p className="text-xs text-gray-600 font-medium mb-2">{stat.description}</p>
-                    <div className="flex items-center">
-                      <Zap className="w-3 h-3 text-green-500 mr-1" />
-                      <span className="text-xs font-semibold text-green-600">{stat.change}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      <option value="all">All Status</option>
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="completed">Completed</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </div>
+                  <div className="col-md-2 mb-3">
+                    <label className="form-label">Team</label>
+                    <select className="form-select" value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)}>
+                      <option value="all">All Teams</option>
+                      {uniqueTeams.map((team) => (
+                        <option key={team} value={team}>
+                          {team}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-2 mb-3">
+                    <label className="form-label">&nbsp;</label>
+                    <button
+                      className="btn btn-outline-secondary w-100"
+                      onClick={() => {
+                        setDateFrom("")
+                        setDateTo("")
+                        setStatusFilter("all")
+                        setTeamFilter("all")
+                      }}
+                    >
+                      <i className="bi bi-arrow-clockwise me-1"></i>
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
+          </div>
+        </div>
 
-            {/* Recent Requisitions */}
-            <Card className="glass-card border-0 rounded-3xl animate-slide-up">
-              <CardHeader>
-                <CardTitle className="flex items-center text-2xl font-bold text-gray-800">
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mr-4 shadow-lg">
-                    <TrendingUp className="h-6 w-6 text-white" />
-                  </div>
-                  Recent Requisitions
-                </CardTitle>
-                <CardDescription className="text-gray-600 font-medium text-lg">
-                  {viewMode === "public"
-                    ? "Latest requisition requests from all teams"
-                    : user?.role === "submitter"
-                      ? "Your recent submissions and their status"
-                      : "Latest requisition requests across all teams"}
-                  {(dateFrom || dateTo) && " (filtered by date range)"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {filteredRequisitions.length === 0 ? (
-                  <div className="text-center py-20">
-                    <div className="w-24 h-24 bg-gradient-to-r from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-8">
-                      <Search className="h-12 w-12 text-gray-400" />
+        {/* Navigation Tabs */}
+        {viewMode === "authenticated" && user?.role === "manager" && (
+          <div className="row mb-4">
+            <div className="col">
+              <ul className="nav nav-pills nav-fill">
+                <li className="nav-item">
+                  <button
+                    className={`nav-link ${activeTab === "dashboard" ? "active" : ""}`}
+                    onClick={() => setActiveTab("dashboard")}
+                  >
+                    <i className="bi bi-speedometer2 me-2"></i>
+                    Dashboard
+                  </button>
+                </li>
+                <li className="nav-item">
+                  <button
+                    className={`nav-link ${activeTab === "requisitions" ? "active" : ""}`}
+                    onClick={() => setActiveTab("requisitions")}
+                  >
+                    <i className="bi bi-file-text me-2"></i>
+                    All Requisitions
+                  </button>
+                </li>
+                <li className="nav-item">
+                  <button
+                    className={`nav-link ${activeTab === "teams" ? "active" : ""}`}
+                    onClick={() => setActiveTab("teams")}
+                  >
+                    <i className="bi bi-people me-2"></i>
+                    Team Management
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {/* Content based on active tab */}
+        {(activeTab === "dashboard" || viewMode === "public" || user?.role === "team_member") && (
+          <div className="row">
+            <div className="col">
+              <div className="card">
+                <div className="card-header">
+                  <h5 className="mb-0">
+                    <i className="bi bi-list-ul me-2"></i>
+                    {viewMode === "public"
+                      ? "All Requisitions"
+                      : user?.role === "team_member"
+                        ? "Requisitions for Review"
+                        : "Recent Requisitions"}
+                  </h5>
+                </div>
+                <div className="card-body">
+                  {filteredRequisitions.length === 0 ? (
+                    <div className="text-center py-5">
+                      <i className="bi bi-inbox text-muted" style={{ fontSize: "4rem" }}></i>
+                      <h4 className="text-muted mt-3">No requisitions found</h4>
+                      <p className="text-muted">
+                        {requisitions.length === 0
+                          ? "No data found in your Google Sheet."
+                          : "No requisitions match your current filters."}
+                      </p>
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-4">No requisitions found</h3>
-                    <p className="text-gray-600 mb-8 max-w-md mx-auto text-lg leading-relaxed">
-                      {requisitions.length === 0
-                        ? "No data found in your Google Sheet. Make sure your sheet has data and is properly configured."
-                        : "No requisitions match your current filters. Try adjusting your search criteria."}
-                    </p>
-                    {requisitions.length === 0 && (
-                      <div className="flex justify-center space-x-4">
-                        <Button
-                          variant="outline"
-                          onClick={() => window.open("/api/test-connection", "_blank")}
-                          className="glass-card border-2 h-12 px-6 rounded-2xl font-semibold"
-                        >
-                          Test Connection
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => window.open("/api/debug-columns", "_blank")}
-                          className="glass-card border-2 h-12 px-6 rounded-2xl font-semibold"
-                        >
-                          Debug Sheet
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {filteredRequisitions.slice(0, 10).map((req, index) => (
-                      <div
-                        key={req.id}
-                        className="flex items-center justify-between p-8 glass-card border-0 rounded-3xl hover:shadow-xl transition-all duration-300 animate-fade-in"
-                        style={{ animationDelay: `${index * 50}ms` }}
-                      >
-                        <div className="flex-1">
-                          <h4 className="font-bold text-gray-900 text-xl mb-3">
-                            {req.productName || "Untitled Request"}
-                          </h4>
-                          <div className="flex items-center space-x-4 mb-3">
-                            <Badge className="bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 font-semibold px-3 py-1 rounded-full">
-                              {req.type}
-                            </Badge>
-                            <Badge className="bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 font-semibold px-3 py-1 rounded-full">
-                              {req.assignedTeam}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-gray-600 font-medium">
-                            Submitted: {req.timestamp ? new Date(req.timestamp).toLocaleDateString() : "Unknown"} by{" "}
-                            <span className="font-bold text-gray-800">{req.email}</span>
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-6">
-                          {getStatusBadge(req.status)}
-
-                          {/* Action buttons for team members and managers */}
-                          {(user?.role === "team_member" || user?.role === "manager") && (
-                            <div className="flex space-x-3">
-                              <Button
-                                size="sm"
-                                onClick={() => handleStatusUpdate(req.id, "approved")}
-                                disabled={req.status === "completed" || req.status === "approved"}
-                                className="btn-success h-10 px-4 rounded-2xl font-semibold"
-                              >
-                                <UserCheck className="h-4 w-4 mr-2" />
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => handleStatusUpdate(req.id, "rejected")}
-                                disabled={req.status === "completed" || req.status === "rejected"}
-                                className="btn-danger h-10 px-4 rounded-2xl font-semibold"
-                              >
-                                <XCircle className="h-4 w-4 mr-2" />
-                                Reject
-                              </Button>
-                            </div>
-                          )}
-
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="glass-card border-2 h-10 px-4 rounded-2xl font-semibold hover:bg-white/90 bg-transparent"
-                              >
-                                <Eye className="h-4 w-4 mr-2" />
-                                View Details
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto glass-card border-0 rounded-3xl">
-                              <DialogHeader>
-                                <DialogTitle className="text-3xl font-bold text-gray-900">
-                                  {req.productName || "Requisition Details"}
-                                </DialogTitle>
-                                <DialogDescription className="text-gray-600 text-lg font-medium">
-                                  Complete requisition information and management actions
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="grid gap-8 py-8">
-                                <div className="grid grid-cols-2 gap-8">
-                                  <div className="space-y-3">
-                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                      Submitter Email
-                                    </Label>
-                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
-                                      {req.email}
-                                    </p>
-                                  </div>
-                                  <div className="space-y-3">
-                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                      Current Status
-                                    </Label>
-                                    <div className="pt-2">{getStatusBadge(req.status)}</div>
-                                  </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-8">
-                                  <div className="space-y-3">
-                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                      Request Type
-                                    </Label>
-                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
-                                      {req.type}
-                                    </p>
-                                  </div>
-                                  <div className="space-y-3">
-                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                      Assigned Team
-                                    </Label>
-                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
-                                      {req.assignedTeam}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="space-y-3">
-                                  <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                    Request Details
-                                  </Label>
-                                  <p className="text-gray-900 glass-card p-6 rounded-2xl border-0 leading-relaxed text-lg">
-                                    {req.details}
-                                  </p>
-                                </div>
-                                <div className="grid grid-cols-2 gap-8">
-                                  <div className="space-y-3">
-                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                      POC Name
-                                    </Label>
-                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
-                                      {req.pocName}
-                                    </p>
-                                  </div>
-                                  <div className="space-y-3">
-                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                      POC Email
-                                    </Label>
-                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
-                                      {req.pocEmail}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-8">
-                                  <div className="space-y-3">
-                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                      Estimated Start Date
-                                    </Label>
-                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
-                                      {req.estimatedStartDate}
-                                    </p>
-                                  </div>
-                                  <div className="space-y-3">
-                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                      Expected Delivery Date
-                                    </Label>
-                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
-                                      {req.expectedDeliveryDate}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="space-y-3">
-                                  <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                    Delivery Timeline
-                                  </Label>
-                                  <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
-                                    {req.deliveryTimeline}
-                                  </p>
-                                </div>
-                                {req.requisitionBreakdown && (
-                                  <div className="space-y-3">
-                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                      Requisition Breakdown
-                                    </Label>
-                                    <div className="glass-card p-4 rounded-2xl border-0">
-                                      <a
-                                        href={req.requisitionBreakdown}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 hover:text-blue-800 hover:underline font-bold text-lg flex items-center"
-                                      >
-                                        <FileText className="w-5 h-5 mr-2" />
-                                        View Document
-                                      </a>
-                                    </div>
-                                  </div>
-                                )}
-                                <div className="space-y-3">
-                                  <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                    Submission Date
-                                  </Label>
-                                  <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
-                                    {req.timestamp ? new Date(req.timestamp).toLocaleString() : "Unknown"}
-                                  </p>
-                                </div>
-                                {(user?.role === "team_member" || user?.role === "manager") && (
-                                  <div className="flex space-x-4 pt-8 border-t-2 border-gray-200">
-                                    <Button
+                  ) : (
+                    <div className="table-responsive">
+                      <table className="table table-hover">
+                        <thead>
+                          <tr>
+                            <th>Product/Course</th>
+                            <th>Type</th>
+                            <th>Submitter</th>
+                            <th>Team</th>
+                            <th>Status</th>
+                            <th>Submitted</th>
+                            {(user?.role === "team_member" || user?.role === "manager") && <th>Actions</th>}
+                            <th>Details</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredRequisitions.slice(0, 20).map((req) => (
+                            <tr key={req.id}>
+                              <td>
+                                <strong>{req.productName || "Untitled"}</strong>
+                              </td>
+                              <td>
+                                <span className="badge bg-light text-dark">{req.type}</span>
+                              </td>
+                              <td>{req.email}</td>
+                              <td>
+                                <span className="badge bg-info">{req.assignedTeam}</span>
+                              </td>
+                              <td>{getStatusBadge(req.status)}</td>
+                              <td>{req.timestamp ? new Date(req.timestamp).toLocaleDateString() : "Unknown"}</td>
+                              {(user?.role === "team_member" || user?.role === "manager") && (
+                                <td>
+                                  <div className="btn-group btn-group-sm">
+                                    <button
+                                      className="btn btn-success"
                                       onClick={() => handleStatusUpdate(req.id, "approved")}
                                       disabled={req.status === "completed" || req.status === "approved"}
-                                      className="btn-success h-12 px-6 rounded-2xl font-bold"
+                                      title="Approve"
                                     >
-                                      <UserCheck className="h-5 w-5 mr-2" />
-                                      Approve Request
-                                    </Button>
-                                    <Button
-                                      onClick={() => handleStatusUpdate(req.id, "completed")}
-                                      disabled={req.status !== "approved"}
-                                      className="btn-primary h-12 px-6 rounded-2xl font-bold"
-                                    >
-                                      <CheckCircle className="h-5 w-5 mr-2" />
-                                      Mark Complete
-                                    </Button>
-                                    <Button
+                                      <i className="bi bi-check"></i>
+                                    </button>
+                                    <button
+                                      className="btn btn-danger"
                                       onClick={() => handleStatusUpdate(req.id, "rejected")}
                                       disabled={req.status === "completed" || req.status === "rejected"}
-                                      className="btn-danger h-12 px-6 rounded-2xl font-bold"
+                                      title="Reject"
                                     >
-                                      <XCircle className="h-5 w-5 mr-2" />
-                                      Reject Request
-                                    </Button>
+                                      <i className="bi bi-x"></i>
+                                    </button>
                                   </div>
-                                )}
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                                </td>
+                              )}
+                              <td>
+                                <button
+                                  className="btn btn-outline-primary btn-sm"
+                                  data-bs-toggle="modal"
+                                  data-bs-target={`#modal-${req.id}`}
+                                >
+                                  <i className="bi bi-eye me-1"></i>
+                                  View
+                                </button>
 
-          {/* All Requisitions Tab */}
-          <TabsContent value="requisitions" className="space-y-8">
-            <Card className="glass-card border-0 rounded-3xl animate-slide-up">
-              <CardHeader>
-                <CardTitle className="flex items-center text-2xl font-bold text-gray-800">
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mr-4 shadow-lg">
-                    <FileText className="h-6 w-6 text-white" />
-                  </div>
-                  {viewMode === "public"
-                    ? "All Requisitions"
-                    : user?.role === "submitter"
-                      ? "My Requisitions"
-                      : "All Requisitions"}
-                </CardTitle>
-                <CardDescription className="text-gray-600 font-medium text-lg">
-                  Showing {filteredRequisitions.length} of {requisitions.length} requisitions
-                  {(dateFrom || dateTo) && " (filtered by date range)"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {filteredRequisitions.length === 0 ? (
-                  <div className="text-center py-20">
-                    <div className="w-24 h-24 bg-gradient-to-r from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-8">
-                      <Search className="h-12 w-12 text-gray-400" />
-                    </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-4">No requisitions found</h3>
-                    <p className="text-gray-600 text-lg">
-                      {requisitions.length === 0
-                        ? "No data found in your Google Sheet."
-                        : "No requisitions match your current filters."}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="professional-table">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="font-bold text-gray-700 py-6 text-base">Product/Course</TableHead>
-                          <TableHead className="font-bold text-gray-700 text-base">Type</TableHead>
-                          <TableHead className="font-bold text-gray-700 text-base">Submitter</TableHead>
-                          <TableHead className="font-bold text-gray-700 text-base">Team</TableHead>
-                          <TableHead className="font-bold text-gray-700 text-base">Status</TableHead>
-                          <TableHead className="font-bold text-gray-700 text-base">Submitted</TableHead>
-                          {(user?.role === "team_member" || user?.role === "manager") && (
-                            <TableHead className="font-bold text-gray-700 text-base">Actions</TableHead>
-                          )}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredRequisitions.map((req, index) => (
-                          <TableRow
-                            key={req.id}
-                            className="animate-fade-in"
-                            style={{ animationDelay: `${index * 30}ms` }}
-                          >
-                            <TableCell className="font-bold text-gray-900 py-6 text-base">
-                              {req.productName || "Untitled"}
-                            </TableCell>
-                            <TableCell className="text-gray-700 font-medium">{req.type}</TableCell>
-                            <TableCell className="text-gray-700 font-medium">{req.email}</TableCell>
-                            <TableCell className="text-gray-700 font-medium">{req.assignedTeam}</TableCell>
-                            <TableCell>{getStatusBadge(req.status)}</TableCell>
-                            <TableCell className="text-gray-700 font-medium">
-                              {req.timestamp ? new Date(req.timestamp).toLocaleDateString() : "Unknown"}
-                            </TableCell>
-                            {(user?.role === "team_member" || user?.role === "manager") && (
-                              <TableCell>
-                                <div className="flex space-x-2">
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleStatusUpdate(req.id, "approved")}
-                                    disabled={req.status === "completed" || req.status === "approved"}
-                                    className="btn-success h-8 px-3 rounded-xl text-xs font-semibold"
-                                  >
-                                    Approve
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleStatusUpdate(req.id, "rejected")}
-                                    disabled={req.status === "completed" || req.status === "rejected"}
-                                    className="btn-danger h-8 px-3 rounded-xl text-xs font-semibold"
-                                  >
-                                    Reject
-                                  </Button>
+                                {/* Modal for each requisition */}
+                                <div className="modal fade" id={`modal-${req.id}`} tabIndex={-1} aria-hidden="true">
+                                  <div className="modal-dialog modal-lg">
+                                    <div className="modal-content">
+                                      <div className="modal-header">
+                                        <h5 className="modal-title">{req.productName || "Requisition Details"}</h5>
+                                        <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
+                                      </div>
+                                      <div className="modal-body">
+                                        <div className="row">
+                                          <div className="col-md-6 mb-3">
+                                            <label className="form-label fw-bold">Submitter Email</label>
+                                            <p className="form-control-plaintext">{req.email}</p>
+                                          </div>
+                                          <div className="col-md-6 mb-3">
+                                            <label className="form-label fw-bold">Status</label>
+                                            <div>{getStatusBadge(req.status)}</div>
+                                          </div>
+                                          <div className="col-md-6 mb-3">
+                                            <label className="form-label fw-bold">Type</label>
+                                            <p className="form-control-plaintext">{req.type}</p>
+                                          </div>
+                                          <div className="col-md-6 mb-3">
+                                            <label className="form-label fw-bold">Assigned Team</label>
+                                            <p className="form-control-plaintext">{req.assignedTeam}</p>
+                                          </div>
+                                          <div className="col-12 mb-3">
+                                            <label className="form-label fw-bold">Details</label>
+                                            <p className="form-control-plaintext">{req.details}</p>
+                                          </div>
+                                          <div className="col-md-6 mb-3">
+                                            <label className="form-label fw-bold">POC Name</label>
+                                            <p className="form-control-plaintext">{req.pocName}</p>
+                                          </div>
+                                          <div className="col-md-6 mb-3">
+                                            <label className="form-label fw-bold">POC Email</label>
+                                            <p className="form-control-plaintext">{req.pocEmail}</p>
+                                          </div>
+                                          <div className="col-md-6 mb-3">
+                                            <label className="form-label fw-bold">Estimated Start Date</label>
+                                            <p className="form-control-plaintext">{req.estimatedStartDate}</p>
+                                          </div>
+                                          <div className="col-md-6 mb-3">
+                                            <label className="form-label fw-bold">Expected Delivery Date</label>
+                                            <p className="form-control-plaintext">{req.expectedDeliveryDate}</p>
+                                          </div>
+                                          <div className="col-12 mb-3">
+                                            <label className="form-label fw-bold">Delivery Timeline</label>
+                                            <p className="form-control-plaintext">{req.deliveryTimeline}</p>
+                                          </div>
+                                          {req.requisitionBreakdown && (
+                                            <div className="col-12 mb-3">
+                                              <label className="form-label fw-bold">Requisition Breakdown</label>
+                                              <p>
+                                                <a
+                                                  href={req.requisitionBreakdown}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="btn btn-outline-primary btn-sm"
+                                                >
+                                                  <i className="bi bi-file-text me-1"></i>
+                                                  View Document
+                                                </a>
+                                              </p>
+                                            </div>
+                                          )}
+                                          <div className="col-12 mb-3">
+                                            <label className="form-label fw-bold">Submitted On</label>
+                                            <p className="form-control-plaintext">
+                                              {req.timestamp ? new Date(req.timestamp).toLocaleString() : "Unknown"}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="modal-footer">
+                                        {(user?.role === "team_member" || user?.role === "manager") && (
+                                          <div className="btn-group me-auto">
+                                            <button
+                                              className="btn btn-success"
+                                              onClick={() => {
+                                                handleStatusUpdate(req.id, "approved")
+                                                // Close modal after action
+                                                const modal = document.getElementById(`modal-${req.id}`)
+                                                if (modal) {
+                                                  const bsModal = (window as any).bootstrap.Modal.getInstance(modal)
+                                                  if (bsModal) bsModal.hide()
+                                                }
+                                              }}
+                                              disabled={req.status === "completed" || req.status === "approved"}
+                                            >
+                                              <i className="bi bi-check-circle me-1"></i>
+                                              Approve
+                                            </button>
+                                            <button
+                                              className="btn btn-primary"
+                                              onClick={() => {
+                                                handleStatusUpdate(req.id, "completed")
+                                                const modal = document.getElementById(`modal-${req.id}`)
+                                                if (modal) {
+                                                  const bsModal = (window as any).bootstrap.Modal.getInstance(modal)
+                                                  if (bsModal) bsModal.hide()
+                                                }
+                                              }}
+                                              disabled={req.status !== "approved"}
+                                            >
+                                              <i className="bi bi-check-circle-fill me-1"></i>
+                                              Complete
+                                            </button>
+                                            <button
+                                              className="btn btn-danger"
+                                              onClick={() => {
+                                                handleStatusUpdate(req.id, "rejected")
+                                                const modal = document.getElementById(`modal-${req.id}`)
+                                                if (modal) {
+                                                  const bsModal = (window as any).bootstrap.Modal.getInstance(modal)
+                                                  if (bsModal) bsModal.hide()
+                                                }
+                                              }}
+                                              disabled={req.status === "completed" || req.status === "rejected"}
+                                            >
+                                              <i className="bi bi-x-circle me-1"></i>
+                                              Reject
+                                            </button>
+                                          </div>
+                                        )}
+                                        <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">
+                                          Close
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
-                              </TableCell>
-                            )}
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {viewMode === "authenticated" && user?.role === "manager" && (
-            <TabsContent value="teams" className="space-y-8">
-              <div className="animate-slide-up">
-                <TeamManagement />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
-            </TabsContent>
-          )}
-        </Tabs>
+            </div>
+          </div>
+        )}
+
+        {/* Team Management Tab (Manager Only) */}
+        {activeTab === "teams" && viewMode === "authenticated" && user?.role === "manager" && (
+          <div className="row">
+            <div className="col">
+              <TeamManagement />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
