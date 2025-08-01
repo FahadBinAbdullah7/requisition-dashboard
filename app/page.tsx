@@ -32,7 +32,6 @@ export default function RequisitionDashboard() {
           setAccessToken(userData.accessToken)
           setViewMode("authenticated")
         } else {
-          // No authentication found, stay in public mode
           setAccessToken("public")
           setViewMode("public")
         }
@@ -134,7 +133,6 @@ export default function RequisitionDashboard() {
   const handleStatusUpdate = async (id: string, newStatus: string) => {
     const success = await updateStatus(id, newStatus)
     if (success) {
-      // Show success message
       const alertDiv = document.createElement("div")
       alertDiv.className = "alert alert-success alert-dismissible fade show position-fixed"
       alertDiv.style.cssText = "top: 20px; right: 20px; z-index: 9999; min-width: 300px;"
@@ -144,63 +142,56 @@ export default function RequisitionDashboard() {
         <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
       `
       document.body.appendChild(alertDiv)
-
-      // Auto remove after 3 seconds
       setTimeout(() => {
         if (alertDiv.parentNode) {
           alertDiv.parentNode.removeChild(alertDiv)
         }
       }, 3000)
-
-      // Refresh data after a short delay
       setTimeout(() => refetch(), 1500)
     }
+    return success
   }
 
   const openModal = (reqId: string) => {
-  const modalElement = document.getElementById(`modal-${reqId}`);
-  if (modalElement) {
-    if (typeof window !== "undefined" && (window as any).bootstrap) {
-      const modal = new (window as any).bootstrap.Modal(modalElement);
-      modal.show();
-    } else {
-      // Remove any existing backdrops before adding a new one
-      document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-
-      modalElement.style.display = "block";
-      modalElement.classList.add("show");
-      document.body.classList.add("modal-open");
-
-      // Add backdrop
-      const backdrop = document.createElement("div");
-      backdrop.className = "modal-backdrop fade show";
-      backdrop.id = `backdrop-${reqId}`;
-      document.body.appendChild(backdrop);
+    const modalElement = document.getElementById(`modal-${reqId}`)
+    if (modalElement) {
+      if (typeof window !== "undefined" && (window as any).bootstrap) {
+        const modal = new (window as any).bootstrap.Modal(modalElement)
+        modal.show()
+      } else {
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove())
+        modalElement.style.display = "block"
+        modalElement.classList.add("show")
+        document.body.classList.add("modal-open")
+        const backdrop = document.createElement("div")
+        backdrop.className = "modal-backdrop fade show"
+        backdrop.id = `backdrop-${reqId}`
+        document.body.appendChild(backdrop)
+      }
     }
   }
-};
 
   const closeModal = (reqId: string) => {
-  const modalElement = document.getElementById(`modal-${reqId}`);
-
-  if (modalElement) {
-    modalElement.style.display = "none";
-    modalElement.classList.remove("show");
+    const modalElement = document.getElementById(`modal-${reqId}`)
+    if (modalElement) {
+      if (typeof window !== "undefined" && (window as any).bootstrap) {
+        const modal = (window as any).bootstrap.Modal.getInstance(modalElement)
+        if (modal) {
+          modal.hide()
+        }
+      } else {
+        modalElement.style.display = "none"
+        modalElement.classList.remove("show")
+        document.body.classList.remove("modal-open")
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove())
+      }
+    }
   }
 
-  // Always remove modal-open from body
-  document.body.classList.remove("modal-open");
-
-  // Remove all modal backdrops (in case of multiple modals)
-  document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-};
-
-  // Show login component if explicitly requested
   if (showLogin) {
     return <TeamMemberLogin onLogin={handleLogin} />
   }
 
-  // Show loading only if auth hasn't been checked yet
   if (!authChecked || (loading && !requisitions.length)) {
     return (
       <div className="min-vh-100 d-flex align-items-center justify-content-center">
@@ -268,7 +259,6 @@ export default function RequisitionDashboard() {
             <i className="bi bi-file-text me-2" style={{ fontSize: "1.5rem" }}></i>
             Requisition Management System
           </a>
-
           <div className="d-flex align-items-center">
             {viewMode === "public" ? (
               <div className="d-flex align-items-center">
@@ -622,7 +612,6 @@ export default function RequisitionDashboard() {
                                   <i className="bi bi-eye me-1"></i>
                                   View
                                 </button>
-
                                 {/* Enhanced Modal for each requisition */}
                                 <div className="modal fade" id={`modal-${req.id}`} tabIndex={-1} aria-hidden="true">
                                   <div className="modal-dialog modal-xl">
@@ -635,10 +624,12 @@ export default function RequisitionDashboard() {
                                         <button
                                           type="button"
                                           className="btn-close btn-close-white"
-                                          onClick={() => (req.id)}
+                                          onClick={() => closeModal(req.id)}
+                                          aria-label="Close"
                                         ></button>
                                       </div>
-                                    <div className="modal-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>                                        <div className="row g-4">
+                                      <div className="modal-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+                                        <div className="row g-4">
                                           {/* Basic Information */}
                                           <div className="col-12">
                                             <div className="card">
@@ -689,7 +680,6 @@ export default function RequisitionDashboard() {
                                               </div>
                                             </div>
                                           </div>
-
                                           {/* Contact Information */}
                                           <div className="col-12">
                                             <div className="card">
@@ -727,7 +717,6 @@ export default function RequisitionDashboard() {
                                               </div>
                                             </div>
                                           </div>
-
                                           {/* Project Details */}
                                           <div className="col-12">
                                             <div className="card">
@@ -780,7 +769,6 @@ export default function RequisitionDashboard() {
                                               </div>
                                             </div>
                                           </div>
-
                                           {/* Additional Information */}
                                           <div className="col-12">
                                             <div className="card">
@@ -833,7 +821,7 @@ export default function RequisitionDashboard() {
                                               className="btn btn-success"
                                               onClick={() => {
                                                 handleStatusUpdate(req.id, "approved")
-                                                (req.id)
+                                                closeModal(req.id)
                                               }}
                                               disabled={req.status === "completed" || req.status === "approved"}
                                             >
@@ -844,7 +832,7 @@ export default function RequisitionDashboard() {
                                               className="btn btn-primary"
                                               onClick={() => {
                                                 handleStatusUpdate(req.id, "completed")
-                                                (req.id)
+                                                closeModal(req.id)
                                               }}
                                               disabled={req.status !== "approved"}
                                             >
@@ -855,7 +843,7 @@ export default function RequisitionDashboard() {
                                               className="btn btn-danger"
                                               onClick={() => {
                                                 handleStatusUpdate(req.id, "rejected")
-                                                (req.id)
+                                                closeModal(req.id)
                                               }}
                                               disabled={req.status === "completed" || req.status === "rejected"}
                                             >
@@ -867,7 +855,7 @@ export default function RequisitionDashboard() {
                                         <button
                                           type="button"
                                           className="btn btn-secondary"
-                                          onClick={() => (req.id)}
+                                          onClick={() => closeModal(req.id)}
                                         >
                                           <i className="bi bi-x-lg me-1"></i>
                                           Close
