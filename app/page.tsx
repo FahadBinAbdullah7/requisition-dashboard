@@ -180,19 +180,19 @@ export default function RequisitionDashboard() {
   }
 
   const closeModal = (reqId: string) => {
-    const modalElement = document.getElementById(`modal-${reqId}`)
-    const backdrop = document.getElementById(`backdrop-${reqId}`)
+  const modalElement = document.getElementById(`modal-${reqId}`)
 
-    if (modalElement) {
-      modalElement.style.display = "none"
-      modalElement.classList.remove("show")
-      document.body.classList.remove("modal-open")
-
-      if (backdrop) {
-        backdrop.remove()
-      }
-    }
+  if (modalElement) {
+    modalElement.style.display = "none"
+    modalElement.classList.remove("show")
   }
+
+  // Always remove modal-open from body
+  document.body.classList.remove("modal-open")
+
+  // Remove all backdrops (in case of multiple modals)
+  document.querySelectorAll('.modal-backdrop').forEach(el => el.remove())
+}
 
   // Show login component if explicitly requested
   if (showLogin) {
@@ -634,11 +634,10 @@ export default function RequisitionDashboard() {
                                         <button
                                           type="button"
                                           className="btn-close btn-close-white"
-                                          onClick={() => closeModal(req.id)}
+                                          onClick={() => (req.id)}
                                         ></button>
                                       </div>
-                                      <div className="modal-body">
-                                        <div className="row g-4">
+                                    <div className="modal-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>                                        <div className="row g-4">
                                           {/* Basic Information */}
                                           <div className="col-12">
                                             <div className="card">
@@ -833,7 +832,7 @@ export default function RequisitionDashboard() {
                                               className="btn btn-success"
                                               onClick={() => {
                                                 handleStatusUpdate(req.id, "approved")
-                                                closeModal(req.id)
+                                                (req.id)
                                               }}
                                               disabled={req.status === "completed" || req.status === "approved"}
                                             >
@@ -844,7 +843,7 @@ export default function RequisitionDashboard() {
                                               className="btn btn-primary"
                                               onClick={() => {
                                                 handleStatusUpdate(req.id, "completed")
-                                                closeModal(req.id)
+                                                (req.id)
                                               }}
                                               disabled={req.status !== "approved"}
                                             >
@@ -855,7 +854,7 @@ export default function RequisitionDashboard() {
                                               className="btn btn-danger"
                                               onClick={() => {
                                                 handleStatusUpdate(req.id, "rejected")
-                                                closeModal(req.id)
+                                                (req.id)
                                               }}
                                               disabled={req.status === "completed" || req.status === "rejected"}
                                             >
@@ -867,7 +866,7 @@ export default function RequisitionDashboard() {
                                         <button
                                           type="button"
                                           className="btn btn-secondary"
-                                          onClick={() => closeModal(req.id)}
+                                          onClick={() => (req.id)}
                                         >
                                           <i className="bi bi-x-lg me-1"></i>
                                           Close
