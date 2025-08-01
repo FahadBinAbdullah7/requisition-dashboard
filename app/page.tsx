@@ -34,6 +34,11 @@ import {
   Users,
   Calendar,
   Search,
+  Activity,
+  Zap,
+  Target,
+  Award,
+  RefreshCw,
 } from "lucide-react"
 import { useRequisitions } from "@/hooks/use-requisitions"
 import { TeamMemberLogin } from "@/components/team-member-login"
@@ -101,27 +106,35 @@ export default function RequisitionDashboard() {
   const getStatusBadge = (status: string) => {
     const statusLower = status?.toLowerCase() || "pending"
 
-    const badgeClasses = {
-      pending: "bg-gradient-to-r from-amber-50 to-yellow-50 text-amber-800 border-amber-200 shadow-sm",
-      approved: "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-800 border-blue-200 shadow-sm",
-      completed: "bg-gradient-to-r from-emerald-50 to-green-50 text-emerald-800 border-emerald-200 shadow-sm",
-      rejected: "bg-gradient-to-r from-red-50 to-rose-50 text-red-800 border-red-200 shadow-sm",
+    const statusConfig = {
+      pending: {
+        className: "status-pending",
+        icon: <Clock className="w-3 h-3 mr-1.5" />,
+        label: "Pending",
+      },
+      approved: {
+        className: "status-approved",
+        icon: <CheckCircle className="w-3 h-3 mr-1.5" />,
+        label: "Approved",
+      },
+      completed: {
+        className: "status-completed",
+        icon: <CheckCircle className="w-3 h-3 mr-1.5" />,
+        label: "Completed",
+      },
+      rejected: {
+        className: "status-rejected",
+        icon: <XCircle className="w-3 h-3 mr-1.5" />,
+        label: "Rejected",
+      },
     }
 
-    const icons = {
-      pending: <Clock className="w-3 h-3 mr-1.5" />,
-      approved: <CheckCircle className="w-3 h-3 mr-1.5" />,
-      completed: <CheckCircle className="w-3 h-3 mr-1.5" />,
-      rejected: <XCircle className="w-3 h-3 mr-1.5" />,
-    }
+    const config = statusConfig[statusLower as keyof typeof statusConfig] || statusConfig.pending
 
     return (
-      <Badge
-        variant="secondary"
-        className={`${badgeClasses[statusLower as keyof typeof badgeClasses] || badgeClasses.pending} font-medium px-3 py-1 text-xs`}
-      >
-        {icons[statusLower as keyof typeof icons] || icons.pending}
-        {status?.charAt(0).toUpperCase() + status?.slice(1) || "Pending"}
+      <Badge className={`${config.className} font-semibold px-3 py-1.5 text-xs rounded-full border-0`}>
+        {config.icon}
+        {config.label}
       </Badge>
     )
   }
@@ -159,21 +172,28 @@ export default function RequisitionDashboard() {
     refetch()
   }
 
+  const handleStatusUpdate = async (id: string, newStatus: string) => {
+    await updateStatus(id, newStatus)
+    // Force a refetch to ensure public view sees the update
+    setTimeout(() => {
+      refetch()
+    }, 1000)
+  }
+
   if (showLogin) {
     return <TeamMemberLogin onLogin={handleLogin} />
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-strong border-0 animate-scale-in">
-          <CardContent className="flex flex-col items-center justify-center p-8">
-            <div className="relative">
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200"></div>
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent absolute top-0"></div>
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-2">Loading Dashboard</h3>
-            <p className="text-gray-600 text-center">Fetching requisitions from Google Sheets...</p>
+      <div className="dashboard-container flex items-center justify-center p-8">
+        <Card className="glass-card w-full max-w-md border-0 rounded-3xl animate-bounce-in">
+          <CardContent className="flex flex-col items-center justify-center p-12">
+            <div className="loading-spinner mb-8"></div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">Loading Dashboard</h3>
+            <p className="text-gray-600 text-center leading-relaxed">
+              Connecting to Google Sheets and fetching your requisitions...
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -182,35 +202,38 @@ export default function RequisitionDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-rose-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-lg shadow-strong border-red-200 animate-fade-in">
-          <CardHeader className="text-center">
-            <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-              <AlertCircle className="w-8 h-8 text-red-600" />
+      <div className="dashboard-container flex items-center justify-center p-8">
+        <Card className="glass-card w-full max-w-lg border-0 rounded-3xl animate-scale-in">
+          <CardHeader className="text-center pb-6">
+            <div className="mx-auto w-20 h-20 bg-gradient-to-r from-red-500 to-rose-500 rounded-full flex items-center justify-center mb-6 shadow-lg">
+              <AlertCircle className="w-10 h-10 text-white" />
             </div>
-            <CardTitle className="text-red-600 text-xl">Connection Error</CardTitle>
-            <CardDescription className="text-gray-600">Unable to connect to Google Sheets</CardDescription>
+            <CardTitle className="text-2xl font-bold text-red-600">Connection Error</CardTitle>
+            <CardDescription className="text-gray-600 text-lg">Unable to connect to Google Sheets</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <p className="text-red-800 text-sm">{error}</p>
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 mb-8">
+              <p className="text-red-800 font-medium">{error}</p>
             </div>
-            <div className="space-y-3">
-              <Button className="w-full bg-red-600 hover:bg-red-700 btn-hover" onClick={() => window.location.reload()}>
-                <AlertCircle className="w-4 h-4 mr-2" />
+            <div className="space-y-4">
+              <Button
+                className="w-full btn-primary h-12 rounded-2xl font-semibold"
+                onClick={() => window.location.reload()}
+              >
+                <RefreshCw className="w-5 h-5 mr-2" />
                 Retry Connection
               </Button>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <Button
                   variant="outline"
-                  className="bg-white/50 hover:bg-white/80"
+                  className="glass-card border-2 h-12 rounded-2xl font-medium bg-transparent"
                   onClick={() => window.open("/api/test-connection", "_blank")}
                 >
                   Test API
                 </Button>
                 <Button
                   variant="outline"
-                  className="bg-white/50 hover:bg-white/80"
+                  className="glass-card border-2 h-12 rounded-2xl font-medium bg-transparent"
                   onClick={() => window.open("/api/debug-columns", "_blank")}
                 >
                   Debug Sheet
@@ -224,49 +247,51 @@ export default function RequisitionDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      {/* Header */}
-      <header className="bg-white/90 backdrop-blur-md shadow-soft border-b border-white/20 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="dashboard-container min-h-screen">
+      {/* Professional Header */}
+      <header className="professional-header sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center animate-fade-in">
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-3 rounded-2xl mr-4 shadow-medium">
-                <FileText className="h-8 w-8 text-white" />
+              <div className="w-14 h-14 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 rounded-2xl flex items-center justify-center mr-4 shadow-xl">
+                <FileText className="h-7 w-7 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-indigo-900 bg-clip-text text-transparent">
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent">
                   Requisition Dashboard
                 </h1>
-                <p className="text-sm text-gray-600 mt-1">
-                  {viewMode === "public" ? "Public View - All Requisitions" : "Authenticated Dashboard"}
+                <p className="text-gray-600 font-medium mt-1">
+                  {viewMode === "public" ? "🌐 Public View - All Requisitions" : "🔐 Authenticated Dashboard"}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center space-x-4 animate-fade-in">
               {viewMode === "public" ? (
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-4">
                   <Button
                     onClick={() => setShowLogin(true)}
-                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-medium btn-hover"
+                    className="btn-primary h-12 px-6 rounded-2xl font-semibold"
                   >
-                    <LogIn className="h-4 w-4 mr-2" />
+                    <LogIn className="h-5 w-5 mr-2" />
                     Team Login
                   </Button>
-                  <Badge className="bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border-green-200 px-4 py-2 shadow-sm">
-                    <Eye className="h-3 w-3 mr-1.5" />
-                    Public View
+                  <Badge className="bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border-green-200 px-4 py-2 rounded-full font-semibold">
+                    <Eye className="h-4 w-4 mr-2" />
+                    Public Access
                   </Badge>
                 </div>
               ) : (
                 <div className="flex items-center space-x-4">
                   <div className="text-right">
-                    <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
-                    <p className="text-xs text-gray-500 capitalize">{user?.role?.replace("_", " ")}</p>
+                    <p className="text-lg font-bold text-gray-900">{user?.name}</p>
+                    <p className="text-sm text-gray-600 capitalize font-medium">
+                      {user?.role?.replace("_", " ")} • {user?.team || "All Teams"}
+                    </p>
                   </div>
-                  <Avatar className="h-12 w-12 ring-2 ring-blue-100 shadow-medium">
+                  <Avatar className="h-14 w-14 ring-4 ring-blue-100 shadow-lg">
                     <AvatarImage src={user?.picture || "/placeholder.svg"} />
-                    <AvatarFallback className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold text-lg">
+                    <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold text-lg">
                       {user?.name
                         ?.split(" ")
                         .map((n: string) => n[0])
@@ -277,9 +302,9 @@ export default function RequisitionDashboard() {
                     variant="ghost"
                     size="sm"
                     onClick={handleLogout}
-                    className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl"
+                    className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl h-10 w-10"
                   >
-                    <LogOut className="h-4 w-4" />
+                    <LogOut className="h-5 w-5" />
                   </Button>
                 </div>
               )}
@@ -288,22 +313,25 @@ export default function RequisitionDashboard() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filters */}
-        <Card className="mb-8 shadow-medium border-0 bg-white/80 backdrop-blur-sm animate-slide-up">
+      <div className="max-w-7xl mx-auto px-6 lg:px-8 py-8 relative z-10">
+        {/* Filters Section */}
+        <Card className="filters-section mb-8 border-0 animate-slide-up">
           <CardHeader>
-            <CardTitle className="flex items-center text-lg text-gray-800">
-              <div className="bg-blue-100 p-2 rounded-lg mr-3">
-                <Filter className="h-5 w-5 text-blue-600" />
+            <CardTitle className="flex items-center text-xl font-bold text-gray-800">
+              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl flex items-center justify-center mr-3 shadow-lg">
+                <Filter className="h-5 w-5 text-white" />
               </div>
-              Filters & Search
+              Smart Filters & Search
             </CardTitle>
+            <CardDescription className="text-gray-600 font-medium">
+              Filter and search through requisitions with advanced options
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="dateFrom" className="text-sm font-medium text-gray-700 flex items-center">
-                  <Calendar className="w-4 h-4 mr-1.5" />
+              <div className="space-y-3">
+                <Label htmlFor="dateFrom" className="text-sm font-bold text-gray-700 flex items-center">
+                  <Calendar className="w-4 h-4 mr-2 text-blue-600" />
                   From Date
                 </Label>
                 <Input
@@ -311,12 +339,12 @@ export default function RequisitionDashboard() {
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="bg-white/70 border-gray-200 focus:border-blue-400 focus:ring-blue-400 rounded-xl"
+                  className="professional-input h-12 font-medium"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="dateTo" className="text-sm font-medium text-gray-700 flex items-center">
-                  <Calendar className="w-4 h-4 mr-1.5" />
+              <div className="space-y-3">
+                <Label htmlFor="dateTo" className="text-sm font-bold text-gray-700 flex items-center">
+                  <Calendar className="w-4 h-4 mr-2 text-blue-600" />
                   To Date
                 </Label>
                 <Input
@@ -324,16 +352,16 @@ export default function RequisitionDashboard() {
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="bg-white/70 border-gray-200 focus:border-blue-400 focus:ring-blue-400 rounded-xl"
+                  className="professional-input h-12 font-medium"
                 />
               </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-700 flex items-center">
-                  <BarChart3 className="w-4 h-4 mr-1.5" />
-                  Status
+              <div className="space-y-3">
+                <Label className="text-sm font-bold text-gray-700 flex items-center">
+                  <BarChart3 className="w-4 h-4 mr-2 text-blue-600" />
+                  Status Filter
                 </Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="bg-white/70 border-gray-200 focus:border-blue-400 focus:ring-blue-400 rounded-xl">
+                  <SelectTrigger className="professional-input h-12 font-medium">
                     <SelectValue placeholder="All Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -345,13 +373,13 @@ export default function RequisitionDashboard() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-700 flex items-center">
-                  <Users className="w-4 h-4 mr-1.5" />
-                  Team
+              <div className="space-y-3">
+                <Label className="text-sm font-bold text-gray-700 flex items-center">
+                  <Users className="w-4 h-4 mr-2 text-blue-600" />
+                  Team Filter
                 </Label>
                 <Select value={teamFilter} onValueChange={setTeamFilter}>
-                  <SelectTrigger className="bg-white/70 border-gray-200 focus:border-blue-400 focus:ring-blue-400 rounded-xl">
+                  <SelectTrigger className="professional-input h-12 font-medium">
                     <SelectValue placeholder="All Teams" />
                   </SelectTrigger>
                   <SelectContent>
@@ -373,8 +401,9 @@ export default function RequisitionDashboard() {
                     setStatusFilter("all")
                     setTeamFilter("all")
                   }}
-                  className="w-full bg-white/70 hover:bg-white/90 border-gray-200 rounded-xl btn-hover"
+                  className="w-full glass-card border-2 h-12 rounded-2xl font-semibold hover:bg-white/90"
                 >
+                  <RefreshCw className="w-4 h-4 mr-2" />
                   Clear All
                 </Button>
               </div>
@@ -384,38 +413,28 @@ export default function RequisitionDashboard() {
 
         <Tabs defaultValue="dashboard" className="space-y-8">
           {viewMode === "authenticated" && user?.role === "manager" ? (
-            <TabsList className="grid w-full grid-cols-3 bg-white/80 backdrop-blur-sm shadow-medium border-0 p-1 rounded-2xl">
-              <TabsTrigger
-                value="dashboard"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white data-[state=active]:shadow-medium rounded-xl font-medium"
-              >
+            <TabsList className="professional-tabs grid w-full grid-cols-3">
+              <TabsTrigger value="dashboard" className="professional-tab h-12 font-semibold">
+                <Activity className="w-5 h-5 mr-2" />
                 Dashboard
               </TabsTrigger>
-              <TabsTrigger
-                value="requisitions"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white data-[state=active]:shadow-medium rounded-xl font-medium"
-              >
+              <TabsTrigger value="requisitions" className="professional-tab h-12 font-semibold">
+                <FileText className="w-5 h-5 mr-2" />
                 All Requisitions
               </TabsTrigger>
-              <TabsTrigger
-                value="teams"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white data-[state=active]:shadow-medium rounded-xl font-medium"
-              >
+              <TabsTrigger value="teams" className="professional-tab h-12 font-semibold">
+                <Users className="w-5 h-5 mr-2" />
                 Team Management
               </TabsTrigger>
             </TabsList>
           ) : (
-            <TabsList className="grid w-full grid-cols-2 bg-white/80 backdrop-blur-sm shadow-medium border-0 p-1 rounded-2xl">
-              <TabsTrigger
-                value="dashboard"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white data-[state=active]:shadow-medium rounded-xl font-medium"
-              >
+            <TabsList className="professional-tabs grid w-full grid-cols-2">
+              <TabsTrigger value="dashboard" className="professional-tab h-12 font-semibold">
+                <Activity className="w-5 h-5 mr-2" />
                 Overview
               </TabsTrigger>
-              <TabsTrigger
-                value="requisitions"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white data-[state=active]:shadow-medium rounded-xl font-medium"
-              >
+              <TabsTrigger value="requisitions" className="professional-tab h-12 font-semibold">
+                <FileText className="w-5 h-5 mr-2" />
                 {viewMode === "public"
                   ? "All Requisitions"
                   : user?.role === "submitter"
@@ -433,106 +452,114 @@ export default function RequisitionDashboard() {
                 {
                   title: "Total Requests",
                   value: stats.total,
-                  icon: FileText,
-                  color: "blue",
-                  bgGradient: "from-blue-500 to-indigo-500",
+                  icon: Target,
+                  gradient: "from-blue-500 to-indigo-600",
                   description: dateFrom || dateTo ? "In selected range" : "All time",
+                  change: "+12%",
                 },
                 {
-                  title: "Pending",
+                  title: "Pending Review",
                   value: stats.pending,
                   icon: Clock,
-                  color: "amber",
-                  bgGradient: "from-amber-500 to-yellow-500",
+                  gradient: "from-amber-500 to-orange-500",
                   description: `${stats.total > 0 ? Math.round((stats.pending / stats.total) * 100) : 0}% of total`,
+                  change: "-5%",
                 },
                 {
                   title: "Approved",
                   value: stats.approved,
                   icon: CheckCircle,
-                  color: "blue",
-                  bgGradient: "from-blue-500 to-cyan-500",
+                  gradient: "from-blue-500 to-cyan-500",
                   description: `${stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}% of total`,
+                  change: "+8%",
                 },
                 {
                   title: "Completed",
                   value: stats.completed,
-                  icon: CheckCircle,
-                  color: "emerald",
-                  bgGradient: "from-emerald-500 to-green-500",
+                  icon: Award,
+                  gradient: "from-emerald-500 to-green-600",
                   description: `${stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}% of total`,
+                  change: "+15%",
                 },
                 {
                   title: "Rejected",
                   value: stats.rejected,
                   icon: XCircle,
-                  color: "red",
-                  bgGradient: "from-red-500 to-rose-500",
+                  gradient: "from-red-500 to-rose-600",
                   description: `${stats.total > 0 ? Math.round((stats.rejected / stats.total) * 100) : 0}% of total`,
+                  change: "-3%",
                 },
               ].map((stat, index) => (
                 <Card
                   key={stat.title}
-                  className="shadow-medium hover:shadow-strong transition-all duration-300 border-0 bg-white/80 backdrop-blur-sm card-hover animate-fade-in"
+                  className="stats-card border-0 rounded-3xl animate-fade-in"
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                    <CardTitle className="text-sm font-medium text-gray-600">{stat.title}</CardTitle>
-                    <div className={`bg-gradient-to-r ${stat.bgGradient} p-2.5 rounded-xl shadow-sm`}>
-                      <stat.icon className="h-4 w-4 text-white" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <CardTitle className="text-sm font-bold text-gray-600 uppercase tracking-wide">
+                      {stat.title}
+                    </CardTitle>
+                    <div
+                      className={`w-12 h-12 bg-gradient-to-r ${stat.gradient} rounded-2xl flex items-center justify-center shadow-lg`}
+                    >
+                      <stat.icon className="h-6 w-6 text-white" />
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className={`text-3xl font-bold text-${stat.color}-600 mb-1`}>{stat.value}</div>
-                    <p className="text-xs text-gray-500">{stat.description}</p>
+                    <div className="text-4xl font-bold text-gray-900 mb-2">{stat.value}</div>
+                    <p className="text-xs text-gray-600 font-medium mb-2">{stat.description}</p>
+                    <div className="flex items-center">
+                      <Zap className="w-3 h-3 text-green-500 mr-1" />
+                      <span className="text-xs font-semibold text-green-600">{stat.change}</span>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
 
             {/* Recent Requisitions */}
-            <Card className="shadow-medium border-0 bg-white/80 backdrop-blur-sm animate-slide-up">
+            <Card className="glass-card border-0 rounded-3xl animate-slide-up">
               <CardHeader>
-                <CardTitle className="flex items-center text-xl text-gray-800">
-                  <div className="bg-gradient-to-r from-blue-500 to-indigo-500 p-2.5 rounded-xl mr-3 shadow-sm">
-                    <TrendingUp className="h-5 w-5 text-white" />
+                <CardTitle className="flex items-center text-2xl font-bold text-gray-800">
+                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mr-4 shadow-lg">
+                    <TrendingUp className="h-6 w-6 text-white" />
                   </div>
                   Recent Requisitions
                 </CardTitle>
-                <CardDescription className="text-gray-600">
+                <CardDescription className="text-gray-600 font-medium text-lg">
                   {viewMode === "public"
                     ? "Latest requisition requests from all teams"
                     : user?.role === "submitter"
-                      ? "Your recent submissions"
-                      : "Latest requisition requests"}
+                      ? "Your recent submissions and their status"
+                      : "Latest requisition requests across all teams"}
                   {(dateFrom || dateTo) && " (filtered by date range)"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {filteredRequisitions.length === 0 ? (
-                  <div className="text-center py-16">
-                    <div className="bg-gray-100 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
-                      <FileText className="h-10 w-10 text-gray-400" />
+                  <div className="text-center py-20">
+                    <div className="w-24 h-24 bg-gradient-to-r from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-8">
+                      <Search className="h-12 w-12 text-gray-400" />
                     </div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-3">No requisitions found</h3>
-                    <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-4">No requisitions found</h3>
+                    <p className="text-gray-600 mb-8 max-w-md mx-auto text-lg leading-relaxed">
                       {requisitions.length === 0
                         ? "No data found in your Google Sheet. Make sure your sheet has data and is properly configured."
                         : "No requisitions match your current filters. Try adjusting your search criteria."}
                     </p>
                     {requisitions.length === 0 && (
-                      <div className="flex justify-center space-x-3">
+                      <div className="flex justify-center space-x-4">
                         <Button
                           variant="outline"
                           onClick={() => window.open("/api/test-connection", "_blank")}
-                          className="bg-white/70 hover:bg-white/90 btn-hover"
+                          className="glass-card border-2 h-12 px-6 rounded-2xl font-semibold"
                         >
                           Test Connection
                         </Button>
                         <Button
                           variant="outline"
                           onClick={() => window.open("/api/debug-columns", "_blank")}
-                          className="bg-white/70 hover:bg-white/90 btn-hover"
+                          className="glass-card border-2 h-12 px-6 rounded-2xl font-semibold"
                         >
                           Debug Sheet
                         </Button>
@@ -540,47 +567,52 @@ export default function RequisitionDashboard() {
                     )}
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     {filteredRequisitions.slice(0, 10).map((req, index) => (
                       <div
                         key={req.id}
-                        className="flex items-center justify-between p-6 border border-gray-200 rounded-2xl hover:bg-white/70 transition-all duration-300 hover:shadow-medium animate-fade-in"
+                        className="flex items-center justify-between p-8 glass-card border-0 rounded-3xl hover:shadow-xl transition-all duration-300 animate-fade-in"
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
                         <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900 text-lg mb-2">
+                          <h4 className="font-bold text-gray-900 text-xl mb-3">
                             {req.productName || "Untitled Request"}
                           </h4>
-                          <p className="text-sm text-gray-600 mb-2">
-                            <span className="font-medium">{req.type}</span> • {req.assignedTeam}
-                          </p>
-                          <p className="text-xs text-gray-500">
+                          <div className="flex items-center space-x-4 mb-3">
+                            <Badge className="bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 font-semibold px-3 py-1 rounded-full">
+                              {req.type}
+                            </Badge>
+                            <Badge className="bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 font-semibold px-3 py-1 rounded-full">
+                              {req.assignedTeam}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-600 font-medium">
                             Submitted: {req.timestamp ? new Date(req.timestamp).toLocaleDateString() : "Unknown"} by{" "}
-                            <span className="font-medium">{req.email}</span>
+                            <span className="font-bold text-gray-800">{req.email}</span>
                           </p>
                         </div>
-                        <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-6">
                           {getStatusBadge(req.status)}
 
                           {/* Action buttons for team members and managers */}
                           {(user?.role === "team_member" || user?.role === "manager") && (
-                            <div className="flex space-x-2">
+                            <div className="flex space-x-3">
                               <Button
                                 size="sm"
-                                onClick={() => updateStatus(req.id, "approved")}
+                                onClick={() => handleStatusUpdate(req.id, "approved")}
                                 disabled={req.status === "completed" || req.status === "approved"}
-                                className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-sm btn-hover text-xs px-3"
+                                className="btn-success h-10 px-4 rounded-2xl font-semibold"
                               >
-                                <UserCheck className="h-3 w-3 mr-1" />
+                                <UserCheck className="h-4 w-4 mr-2" />
                                 Approve
                               </Button>
                               <Button
                                 size="sm"
-                                onClick={() => updateStatus(req.id, "rejected")}
+                                onClick={() => handleStatusUpdate(req.id, "rejected")}
                                 disabled={req.status === "completed" || req.status === "rejected"}
-                                className="bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white shadow-sm btn-hover text-xs px-3"
+                                className="btn-danger h-10 px-4 rounded-2xl font-semibold"
                               >
-                                <XCircle className="h-3 w-3 mr-1" />
+                                <XCircle className="h-4 w-4 mr-2" />
                                 Reject
                               </Button>
                             </div>
@@ -591,129 +623,158 @@ export default function RequisitionDashboard() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="bg-white/70 hover:bg-white/90 border-gray-200 rounded-xl btn-hover"
+                                className="glass-card border-2 h-10 px-4 rounded-2xl font-semibold hover:bg-white/90 bg-transparent"
                               >
-                                <Eye className="h-3 w-3 mr-1.5" />
+                                <Eye className="h-4 w-4 mr-2" />
                                 View Details
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto rounded-2xl">
+                            <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto glass-card border-0 rounded-3xl">
                               <DialogHeader>
-                                <DialogTitle className="text-2xl font-semibold">
+                                <DialogTitle className="text-3xl font-bold text-gray-900">
                                   {req.productName || "Requisition Details"}
                                 </DialogTitle>
-                                <DialogDescription className="text-gray-600">
-                                  Complete requisition information and details
+                                <DialogDescription className="text-gray-600 text-lg font-medium">
+                                  Complete requisition information and management actions
                                 </DialogDescription>
                               </DialogHeader>
-                              <div className="grid gap-6 py-6">
-                                <div className="grid grid-cols-2 gap-6">
-                                  <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-gray-700">Submitter Email</Label>
-                                    <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-xl">{req.email}</p>
+                              <div className="grid gap-8 py-8">
+                                <div className="grid grid-cols-2 gap-8">
+                                  <div className="space-y-3">
+                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                      Submitter Email
+                                    </Label>
+                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
+                                      {req.email}
+                                    </p>
                                   </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-gray-700">Status</Label>
-                                    <div className="pt-1">{getStatusBadge(req.status)}</div>
+                                  <div className="space-y-3">
+                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                      Current Status
+                                    </Label>
+                                    <div className="pt-2">{getStatusBadge(req.status)}</div>
                                   </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-6">
-                                  <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-gray-700">Type</Label>
-                                    <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-xl">{req.type}</p>
+                                <div className="grid grid-cols-2 gap-8">
+                                  <div className="space-y-3">
+                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                      Request Type
+                                    </Label>
+                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
+                                      {req.type}
+                                    </p>
                                   </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-gray-700">Assigned Team</Label>
-                                    <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-xl">
+                                  <div className="space-y-3">
+                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                      Assigned Team
+                                    </Label>
+                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
                                       {req.assignedTeam}
                                     </p>
                                   </div>
                                 </div>
-                                <div className="space-y-2">
-                                  <Label className="text-sm font-semibold text-gray-700">Details</Label>
-                                  <p className="text-sm text-gray-900 bg-gray-50 p-4 rounded-xl leading-relaxed">
+                                <div className="space-y-3">
+                                  <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                    Request Details
+                                  </Label>
+                                  <p className="text-gray-900 glass-card p-6 rounded-2xl border-0 leading-relaxed text-lg">
                                     {req.details}
                                   </p>
                                 </div>
-                                <div className="grid grid-cols-2 gap-6">
-                                  <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-gray-700">POC Name</Label>
-                                    <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-xl">{req.pocName}</p>
+                                <div className="grid grid-cols-2 gap-8">
+                                  <div className="space-y-3">
+                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                      POC Name
+                                    </Label>
+                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
+                                      {req.pocName}
+                                    </p>
                                   </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-gray-700">POC Email</Label>
-                                    <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-xl">{req.pocEmail}</p>
+                                  <div className="space-y-3">
+                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                      POC Email
+                                    </Label>
+                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
+                                      {req.pocEmail}
+                                    </p>
                                   </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-6">
-                                  <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-gray-700">Estimated Start Date</Label>
-                                    <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-xl">
+                                <div className="grid grid-cols-2 gap-8">
+                                  <div className="space-y-3">
+                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                      Estimated Start Date
+                                    </Label>
+                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
                                       {req.estimatedStartDate}
                                     </p>
                                   </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-gray-700">
+                                  <div className="space-y-3">
+                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
                                       Expected Delivery Date
                                     </Label>
-                                    <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-xl">
+                                    <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
                                       {req.expectedDeliveryDate}
                                     </p>
                                   </div>
                                 </div>
-                                <div className="space-y-2">
-                                  <Label className="text-sm font-semibold text-gray-700">Delivery Timeline</Label>
-                                  <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-xl">
+                                <div className="space-y-3">
+                                  <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                    Delivery Timeline
+                                  </Label>
+                                  <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
                                     {req.deliveryTimeline}
                                   </p>
                                 </div>
                                 {req.requisitionBreakdown && (
-                                  <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-gray-700">Requisition Breakdown</Label>
-                                    <div className="bg-gray-50 p-3 rounded-xl">
+                                  <div className="space-y-3">
+                                    <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                      Requisition Breakdown
+                                    </Label>
+                                    <div className="glass-card p-4 rounded-2xl border-0">
                                       <a
                                         href={req.requisitionBreakdown}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                        className="text-blue-600 hover:text-blue-800 hover:underline font-bold text-lg flex items-center"
                                       >
-                                        📄 View Document
+                                        <FileText className="w-5 h-5 mr-2" />
+                                        View Document
                                       </a>
                                     </div>
                                   </div>
                                 )}
-                                <div className="space-y-2">
-                                  <Label className="text-sm font-semibold text-gray-700">Submitted On</Label>
-                                  <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-xl">
+                                <div className="space-y-3">
+                                  <Label className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                    Submission Date
+                                  </Label>
+                                  <p className="text-lg font-semibold text-gray-900 glass-card p-4 rounded-2xl border-0">
                                     {req.timestamp ? new Date(req.timestamp).toLocaleString() : "Unknown"}
                                   </p>
                                 </div>
                                 {(user?.role === "team_member" || user?.role === "manager") && (
-                                  <div className="flex space-x-3 pt-6 border-t border-gray-200">
+                                  <div className="flex space-x-4 pt-8 border-t-2 border-gray-200">
                                     <Button
-                                      onClick={() => updateStatus(req.id, "approved")}
+                                      onClick={() => handleStatusUpdate(req.id, "approved")}
                                       disabled={req.status === "completed" || req.status === "approved"}
-                                      className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-medium btn-hover"
+                                      className="btn-success h-12 px-6 rounded-2xl font-bold"
                                     >
-                                      <UserCheck className="h-4 w-4 mr-2" />
+                                      <UserCheck className="h-5 w-5 mr-2" />
                                       Approve Request
                                     </Button>
                                     <Button
-                                      variant="outline"
-                                      onClick={() => updateStatus(req.id, "completed")}
+                                      onClick={() => handleStatusUpdate(req.id, "completed")}
                                       disabled={req.status !== "approved"}
-                                      className="border-blue-200 text-blue-700 hover:bg-blue-50 btn-hover"
+                                      className="btn-primary h-12 px-6 rounded-2xl font-bold"
                                     >
-                                      <CheckCircle className="h-4 w-4 mr-2" />
+                                      <CheckCircle className="h-5 w-5 mr-2" />
                                       Mark Complete
                                     </Button>
                                     <Button
-                                      variant="outline"
-                                      onClick={() => updateStatus(req.id, "rejected")}
+                                      onClick={() => handleStatusUpdate(req.id, "rejected")}
                                       disabled={req.status === "completed" || req.status === "rejected"}
-                                      className="border-red-200 text-red-700 hover:bg-red-50 btn-hover"
+                                      className="btn-danger h-12 px-6 rounded-2xl font-bold"
                                     >
-                                      <XCircle className="h-4 w-4 mr-2" />
+                                      <XCircle className="h-5 w-5 mr-2" />
                                       Reject Request
                                     </Button>
                                   </div>
@@ -732,11 +793,11 @@ export default function RequisitionDashboard() {
 
           {/* All Requisitions Tab */}
           <TabsContent value="requisitions" className="space-y-8">
-            <Card className="shadow-medium border-0 bg-white/80 backdrop-blur-sm animate-slide-up">
+            <Card className="glass-card border-0 rounded-3xl animate-slide-up">
               <CardHeader>
-                <CardTitle className="flex items-center text-xl text-gray-800">
-                  <div className="bg-gradient-to-r from-blue-500 to-indigo-500 p-2.5 rounded-xl mr-3 shadow-sm">
-                    <FileText className="h-5 w-5 text-white" />
+                <CardTitle className="flex items-center text-2xl font-bold text-gray-800">
+                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mr-4 shadow-lg">
+                    <FileText className="h-6 w-6 text-white" />
                   </div>
                   {viewMode === "public"
                     ? "All Requisitions"
@@ -744,37 +805,37 @@ export default function RequisitionDashboard() {
                       ? "My Requisitions"
                       : "All Requisitions"}
                 </CardTitle>
-                <CardDescription className="text-gray-600">
+                <CardDescription className="text-gray-600 font-medium text-lg">
                   Showing {filteredRequisitions.length} of {requisitions.length} requisitions
                   {(dateFrom || dateTo) && " (filtered by date range)"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {filteredRequisitions.length === 0 ? (
-                  <div className="text-center py-16">
-                    <div className="bg-gray-100 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
-                      <Search className="h-10 w-10 text-gray-400" />
+                  <div className="text-center py-20">
+                    <div className="w-24 h-24 bg-gradient-to-r from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-8">
+                      <Search className="h-12 w-12 text-gray-400" />
                     </div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-3">No requisitions found</h3>
-                    <p className="text-gray-600">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-4">No requisitions found</h3>
+                    <p className="text-gray-600 text-lg">
                       {requisitions.length === 0
                         ? "No data found in your Google Sheet."
                         : "No requisitions match your current filters."}
                     </p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto rounded-2xl border border-gray-200">
+                  <div className="professional-table">
                     <Table>
                       <TableHeader>
-                        <TableRow className="bg-gradient-to-r from-gray-50 to-blue-50 hover:from-gray-100 hover:to-blue-100">
-                          <TableHead className="font-semibold text-gray-700 py-4">Product/Course</TableHead>
-                          <TableHead className="font-semibold text-gray-700">Type</TableHead>
-                          <TableHead className="font-semibold text-gray-700">Submitter</TableHead>
-                          <TableHead className="font-semibold text-gray-700">Team</TableHead>
-                          <TableHead className="font-semibold text-gray-700">Status</TableHead>
-                          <TableHead className="font-semibold text-gray-700">Submitted</TableHead>
+                        <TableRow>
+                          <TableHead className="font-bold text-gray-700 py-6 text-base">Product/Course</TableHead>
+                          <TableHead className="font-bold text-gray-700 text-base">Type</TableHead>
+                          <TableHead className="font-bold text-gray-700 text-base">Submitter</TableHead>
+                          <TableHead className="font-bold text-gray-700 text-base">Team</TableHead>
+                          <TableHead className="font-bold text-gray-700 text-base">Status</TableHead>
+                          <TableHead className="font-bold text-gray-700 text-base">Submitted</TableHead>
                           {(user?.role === "team_member" || user?.role === "manager") && (
-                            <TableHead className="font-semibold text-gray-700">Actions</TableHead>
+                            <TableHead className="font-bold text-gray-700 text-base">Actions</TableHead>
                           )}
                         </TableRow>
                       </TableHeader>
@@ -782,17 +843,17 @@ export default function RequisitionDashboard() {
                         {filteredRequisitions.map((req, index) => (
                           <TableRow
                             key={req.id}
-                            className="hover:bg-blue-50/50 transition-colors duration-200 animate-fade-in"
+                            className="animate-fade-in"
                             style={{ animationDelay: `${index * 30}ms` }}
                           >
-                            <TableCell className="font-medium text-gray-900 py-4">
+                            <TableCell className="font-bold text-gray-900 py-6 text-base">
                               {req.productName || "Untitled"}
                             </TableCell>
-                            <TableCell className="text-gray-700">{req.type}</TableCell>
-                            <TableCell className="text-gray-700">{req.email}</TableCell>
-                            <TableCell className="text-gray-700">{req.assignedTeam}</TableCell>
+                            <TableCell className="text-gray-700 font-medium">{req.type}</TableCell>
+                            <TableCell className="text-gray-700 font-medium">{req.email}</TableCell>
+                            <TableCell className="text-gray-700 font-medium">{req.assignedTeam}</TableCell>
                             <TableCell>{getStatusBadge(req.status)}</TableCell>
-                            <TableCell className="text-gray-700">
+                            <TableCell className="text-gray-700 font-medium">
                               {req.timestamp ? new Date(req.timestamp).toLocaleDateString() : "Unknown"}
                             </TableCell>
                             {(user?.role === "team_member" || user?.role === "manager") && (
@@ -800,17 +861,17 @@ export default function RequisitionDashboard() {
                                 <div className="flex space-x-2">
                                   <Button
                                     size="sm"
-                                    onClick={() => updateStatus(req.id, "approved")}
+                                    onClick={() => handleStatusUpdate(req.id, "approved")}
                                     disabled={req.status === "completed" || req.status === "approved"}
-                                    className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white text-xs px-3 py-1 btn-hover"
+                                    className="btn-success h-8 px-3 rounded-xl text-xs font-semibold"
                                   >
                                     Approve
                                   </Button>
                                   <Button
                                     size="sm"
-                                    onClick={() => updateStatus(req.id, "rejected")}
+                                    onClick={() => handleStatusUpdate(req.id, "rejected")}
                                     disabled={req.status === "completed" || req.status === "rejected"}
-                                    className="bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white text-xs px-3 py-1 btn-hover"
+                                    className="btn-danger h-8 px-3 rounded-xl text-xs font-semibold"
                                   >
                                     Reject
                                   </Button>
