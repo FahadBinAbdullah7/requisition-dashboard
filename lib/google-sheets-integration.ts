@@ -1,3 +1,5 @@
+import { google } from "googleapis"
+// Enhanced Google Sheets API integration with proper column mapping and status updates
 export interface RequisitionData {
   id: string
   timestamp: string
@@ -19,11 +21,25 @@ export class GoogleSheetsIntegration {
   private accessToken: string | null
   private apiKey: string | null
   private spreadsheetId: string
+  private serviceAccountCredentials: any // To store parsed credentials
 
   constructor(accessToken?: string) {
     this.accessToken = accessToken || null
     this.apiKey = process.env.GOOGLE_SHEETS_API_KEY || null
-    this.spreadsheetId = "1wbuI0ZlGaXgEuUnGi3HVqZ38R8gA9-vnG0UnIqDPu4o"
+    this.spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || "1wbuI0ZlGaXgEuUnGi3HVqZ38R8gA9-vnG0UnIqDPu4o"
+
+    // Load service account credentials from environment variable
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS) {
+      try {
+        this.serviceAccountCredentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS)
+      } catch (e) {
+        console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_CREDENTIALS:", e)
+        this.serviceAccountCredentials = null
+      }
+    } else {
+      console.warn("GOOGLE_SERVICE_ACCOUNT_CREDENTIALS environment variable not set.")
+      this.serviceAccountCredentials = null
+    }
   }
 
   async getRequisitions(): Promise<RequisitionData[]> {
@@ -81,8 +97,8 @@ export class GoogleSheetsIntegration {
             requisitionBreakdown: row[8] || "",
             estimatedStartDate: row[9] || "",
             expectedDeliveryDate: row[10] || "",
-            pocName: row[11] || "",
-            status: row[82] || "pending",
+            pocName: row[11] || "", // Adjust based on your actual column
+            status: row[82] || "pending", // Column CE (82 in 0-indexed)
           }
 
           // Log first few items for debugging
@@ -98,12 +114,7 @@ export class GoogleSheetsIntegration {
 
           return requisition
         })
-        .filter((req) => req.timestamp && req.email) // Filter out empty rows
-        .sort((a, b) => {
-          const dateA = new Date(a.timestamp)
-          const dateB = new Date(b.timestamp)
-          return dateB.getTime() - dateA.getTime()
-        })
+        .filter((req: RequisitionData) => req.timestamp && req.email) // Filter out empty rows
 
       console.log("Final processed data count:", processedData.length)
       return processedData
@@ -118,44 +129,40 @@ export class GoogleSheetsIntegration {
       console.log("=== UPDATING REQUISITION STATUS ===")
       console.log("Row index:", rowIndex)
       console.log("New status:", status)
-      console.log("Access token present:", !!this.accessToken)
 
-      // For team members without OAuth, we'll simulate the update
-      if (!this.accessToken || this.accessToken === "team-member-token") {
-        console.log("Team member update - simulating success")
-        return true
-      }
-
-      // For managers with OAuth tokens, actually update the sheet
-      const range = `CE${rowIndex + 2}` // CE column, +2 for header and 1-indexed
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`
-
-      console.log("Update URL:", url)
-      console.log("Update range:", range)
-
-      const response = await fetch(url, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          values: [[status]],
-        }),
-      })
-
-      console.log("Update response status:", response.status)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Update error:", errorText)
+      if (!this.serviceAccountCredentials) {
+        console.error("Service account credentials not loaded. Cannot update sheet.")
         return false
       }
 
-      console.log("Status updated successfully in Google Sheets")
+      // Authenticate using the service account
+      const auth = new google.auth.JWT({
+        email: this.serviceAccountCredentials.client_email,
+        key: this.serviceAccountCredentials.private_key.replace(/\\n/g, '\n'), // Replace escaped newlines with actual newlines
+        scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+      })
+
+      const sheets = google.sheets({ version: "v4", auth })
+
+      const range = `CE${rowIndex + 2}` // CE column, +2 for header and 1-indexed
+      const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`
+
+      console.log("Update URL:", updateUrl)
+      console.log("Update range:", range)
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: range,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [[status]],
+        },
+      })
+
+      console.log("Status updated successfully in Google Sheets via Service Account")
       return true
     } catch (error) {
-      console.error("Error updating status:", error)
+      console.error("Error updating status with service account:", error)
       return false
     }
   }
