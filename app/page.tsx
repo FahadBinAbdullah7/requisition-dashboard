@@ -12,6 +12,7 @@ export default function RequisitionDashboard() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [teamFilter, setTeamFilter] = useState("all")
+  const [deliveryTimelineFilter, setDeliveryTimelineFilter] = useState("all")
   const [showLogin, setShowLogin] = useState(false)
   const [viewMode, setViewMode] = useState<"public" | "authenticated">("public")
   const [activeTab, setActiveTab] = useState("dashboard")
@@ -82,12 +83,16 @@ export default function RequisitionDashboard() {
       })
     }
 
+    if (deliveryTimelineFilter !== "all") {
+      filtered = filtered.filter((req) => req.deliveryTimeline?.toLowerCase() === deliveryTimelineFilter)
+    }
+
     if (user?.role === "submitter") {
       filtered = filtered.filter((req) => req.email === user.email)
     }
 
     return filtered
-  }, [requisitions, statusFilter, teamFilter, dateFrom, dateTo, user])
+  }, [requisitions, statusFilter, teamFilter, dateFrom, dateTo, deliveryTimelineFilter, user])
 
   const getStatusBadge = (status: string) => {
     const statusLower = status?.toLowerCase() || "pending"
@@ -420,9 +425,9 @@ export default function RequisitionDashboard() {
                 </h5>
               </div>
               <div className="card-body">
-                <div className="row">
-                  <div className="col-md-2 mb-3">
-                    <label className="form-label">From Date</label>
+                <div className="row g-3">
+                  <div className="col-md-2 col-sm-6 mb-3">
+                    <label className="form-label fw-bold">From Date</label>
                     <input
                       type="date"
                       className="form-control"
@@ -430,8 +435,8 @@ export default function RequisitionDashboard() {
                       onChange={(e) => setDateFrom(e.target.value)}
                     />
                   </div>
-                  <div className="col-md-2 mb-3">
-                    <label className="form-label">To Date</label>
+                  <div className="col-md-2 col-sm-6 mb-3">
+                    <label className="form-label fw-bold">To Date</label>
                     <input
                       type="date"
                       className="form-control"
@@ -439,8 +444,8 @@ export default function RequisitionDashboard() {
                       onChange={(e) => setDateTo(e.target.value)}
                     />
                   </div>
-                  <div className="col-md-2 mb-3">
-                    <label className="form-label">Status</label>
+                  <div className="col-md-2 col-sm-6 mb-3">
+                    <label className="form-label fw-bold">Status</label>
                     <select
                       className="form-select"
                       value={statusFilter}
@@ -453,8 +458,8 @@ export default function RequisitionDashboard() {
                       <option value="rejected">Rejected</option>
                     </select>
                   </div>
-                  <div className="col-md-2 mb-3">
-                    <label className="form-label">Team</label>
+                  <div className="col-md-2 col-sm-6 mb-3">
+                    <label className="form-label fw-bold">Team</label>
                     <select className="form-select" value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)}>
                       <option value="all">All Teams</option>
                       {uniqueTeams.map((team) => (
@@ -464,8 +469,20 @@ export default function RequisitionDashboard() {
                       ))}
                     </select>
                   </div>
-                  <div className="col-md-2 mb-3">
-                    <label className="form-label">&nbsp;</label>
+                  <div className="col-md-2 col-sm-6 mb-3">
+                    <label className="form-label fw-bold">Delivery Timeline</label>
+                    <select
+                      className="form-select"
+                      value={deliveryTimelineFilter}
+                      onChange={(e) => setDeliveryTimelineFilter(e.target.value)}
+                    >
+                      <option value="all">All Timelines</option>
+                      <option value="urgent">Urgent</option>
+                      <option value="regular">Regular</option>
+                    </select>
+                  </div>
+                  <div className="col-md-2 col-sm-6 mb-3">
+                    <label className="form-label fw-bold">&nbsp;</label>
                     <button
                       className="btn btn-outline-secondary w-100"
                       onClick={() => {
@@ -473,6 +490,7 @@ export default function RequisitionDashboard() {
                         setDateTo("")
                         setStatusFilter("all")
                         setTeamFilter("all")
+                        setDeliveryTimelineFilter("all")
                       }}
                     >
                       <i className="bi bi-arrow-clockwise me-1"></i>
