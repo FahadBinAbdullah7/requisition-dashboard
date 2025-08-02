@@ -477,8 +477,8 @@ export default function RequisitionDashboard() {
                       onChange={(e) => setDeliveryTimelineFilter(e.target.value)}
                     >
                       <option value="all">All Timelines</option>
-                      <option value="urgent">Urgent</option>
-                      <option value="regular">Regular</option>
+                      <option value="Urgent">Urgent</option>
+                      <option value="Regular">Regular</option>
                     </select>
                   </div>
                   <div className="col-md-2 col-sm-6 mb-3">
