@@ -262,7 +262,7 @@ export default function RequisitionDashboard() {
         <div className="container">
           <a className="navbar-brand d-flex align-items-center" href="#">
             <i className="bi bi-file-text me-2" style={{ fontSize: "1.5rem" }}></i>
-            Requisition Management System
+            Content Operations & Development Requisition System
           </a>
 
           <div className="d-flex align-items-center">
