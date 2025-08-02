@@ -1,5 +1,5 @@
 import { google } from "googleapis"
-// Enhanced Google Sheets API integration with proper column mapping and status updates
+
 export interface RequisitionData {
   id: string
   timestamp: string
@@ -97,8 +97,8 @@ export class GoogleSheetsIntegration {
             requisitionBreakdown: row[8] || "",
             estimatedStartDate: row[9] || "",
             expectedDeliveryDate: row[10] || "",
-            pocName: row[11] || "", // Adjust based on your actual column
-            status: row[82] || "pending", // Column CE (82 in 0-indexed)
+            pocName: row[11] || "",
+            status: row[82] || "pending",
           }
 
           // Log first few items for debugging
@@ -115,6 +115,11 @@ export class GoogleSheetsIntegration {
           return requisition
         })
         .filter((req: RequisitionData) => req.timestamp && req.email) // Filter out empty rows
+        .sort((a, b) => {
+          const dateA = new Date(a.timestamp)
+          const dateB = new Date(b.timestamp)
+          return dateB.getTime() - dateA.getTime()
+        })
 
       console.log("Final processed data count:", processedData.length)
       return processedData
